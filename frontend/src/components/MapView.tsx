@@ -382,6 +382,10 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       });
       setReady(true);
     };
+    // from far away the "Dark 9 Jul" notes would pile up on a path a few pixels wide: they appear once you zoom in
+    const markFar = () => { if (el.current) el.current.dataset.far = String(m.getZoom() < 4); };
+    m.on("zoom", markFar);
+    markFar();
     m.once("style.load", init);
     if ((m as unknown as { style?: { _loaded?: boolean } }).style?._loaded) init();
     if (import.meta.env.DEV) (window as unknown as { __gfxMap?: maplibregl.Map }).__gfxMap = m;   // debugging/e2e
@@ -538,7 +542,9 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       const tag = document.createElement("span");
       tag.className = `end-label ${cls}`;
       tag.textContent = `${text} ${short(e.time)}`;
-      labelMarkers.current.push(new maplibregl.Marker({ element: tag, anchor: "top", offset: [0, 12] }).setLngLat(e.at).addTo(m));
+      // "Start" sits above its point and "Last seen" below, so both stay readable when a ship ends where it began
+      const above = cls === "end-start";
+      labelMarkers.current.push(new maplibregl.Marker({ element: tag, anchor: above ? "bottom" : "top", offset: [0, above ? -12 : 12] }).setLngLat(e.at).addTo(m));
     }
   }, [ready, hulls, aisOff, visible.changes, visible.hotspots, visible.turnOns, visible.fishing, highlightIllegalZones, illegalZonesGeo, selectedEventId, selection, track, trackGeo]);
 

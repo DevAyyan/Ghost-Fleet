@@ -80,6 +80,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
   -webkit-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 9px); mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 9px); }
 .tl-start { width: 12px; height: 12px; border: 3px solid var(--shelf); background: var(--paper); }
 .tl-latest { width: 12px; height: 12px; background: var(--ink); border-color: var(--paper); box-shadow: 0 0 0 1px var(--ink); }
+.map[data-far="true"] .gap-label { display: none; }
 .end-label { font: 700 var(--fs-xs)/1 var(--sans); white-space: nowrap; pointer-events: none; padding: 3px var(--s-1); border-radius: var(--r-1); }
 .end-start { background: rgb(243 246 245 / 0.94); color: var(--shelf); border: 1.5px solid var(--shelf); }
 .end-latest { background: var(--ink); color: var(--paper); border: 1.5px solid var(--paper); }
