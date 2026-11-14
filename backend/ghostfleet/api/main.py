@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import date
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query, Request
@@ -276,3 +277,11 @@ def get_case_file(event_id: str, request: Request, format: S.CaseFileFormat = S.
         return JSONResponse(s.case_file_geojson(event_id), headers=headers, media_type="application/geo+json")
     cf = s.case_file(event_id)
     return JSONResponse(cf.model_dump(by_alias=True, mode="json"), headers=headers)
+
+
+# Serve production frontend if built
+_dist_dir = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+if _dist_dir.is_dir():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=_dist_dir, html=True), name="frontend")
+
