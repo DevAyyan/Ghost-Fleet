@@ -1,2 +1,0 @@
-Ships turn off their AIS to disappear. Ghost Fleet X combines spaceborne radar, satellite radiance, and spatial graph algorithms to track where they met in the dark. 100% open-source decision support built with public Earth-observation data.
-

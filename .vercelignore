@@ -1,5 +1,4 @@
 # Not needed to build or run on Vercel
-brag-output
 data/raw
 docs
 backend/tests

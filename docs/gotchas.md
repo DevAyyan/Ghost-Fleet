@@ -73,6 +73,6 @@ Each of these cost time on 2026-11-14. Check here before debugging something tha
   and the scan is lazy (`_ensure_loaded`). Don't read `request.app.state.*` directly in a route.
 - **CDN caching**: every successful GET under `/api/` gets `s-maxage=3600` unless the route sets its own header. A route
   whose answer must never be shared between users needs an explicit `Cache-Control: no-store`.
-- `.vercelignore` and the function's `excludeFiles` keep `brag-output/`, `docs/`, `data/raw/` and tests out of the bundle
+- `.vercelignore` and the function's `excludeFiles` keep `docs/`, `data/raw/` and tests out of the bundle
   (limit 250 MB unzipped). `.env` is not deployed: set `GLOBAL_FISHING_WATCH` in the Vercel dashboard.
 

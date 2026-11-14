@@ -8,7 +8,7 @@
     "api/index.py": {
       "maxDuration": 60,
       "memory": 1024,
-      "excludeFiles": "{frontend,docs,scripts,brag-output,data/raw,backend/tests}/**"
+      "excludeFiles": "{frontend,docs,scripts,data/raw,backend/tests}/**"
     }
   },
   "rewrites": [
