@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from datetime import date
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -18,7 +19,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..gfw import GFWError, GFWLive, month_axis
+from ..gfw import ON_VERCEL, GFWError, GFWLive, month_axis
 from ..real import DataUnavailable, load_real_panel
 from ..sea import MAX_SPAN_DAYS, LayerNotBuilt, SeaWatch, default_period
 from ..synthetic import make_panel
@@ -48,11 +49,43 @@ def _try_load(app: FastAPI) -> None:
         app.state.svc, app.state.load_error = None, str(e)
 
 
+_load_lock = threading.Lock()
+
+
+def _ensure_loaded(app: FastAPI) -> None:
+    """Load the panel and run the scan once. Lazy, so a serverless cold start only pays for it when a request needs it."""
+    if getattr(app.state, "loaded", False):
+        return
+    with _load_lock:
+        if not getattr(app.state, "loaded", False):
+            _try_load(app)
+            app.state.loaded = True
+
+
+def _client(app: FastAPI, name: str, make):
+    """app.state.<name>, created on first use: serverless hosts do not always run the startup hook."""
+    obj = getattr(app.state, name, None)
+    if obj is None:
+        obj = make()
+        setattr(app.state, name, obj)
+    return obj
+
+
+def gfw_live(request: Request) -> GFWLive:
+    return _client(request.app, "gfw", GFWLive)
+
+
+def sea_watch(request: Request) -> SeaWatch:
+    return _client(request.app, "sea", SeaWatch)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.gfw = GFWLive()
     app.state.sea = SeaWatch()
-    _try_load(app)
+    app.state.loaded = False
+    if not ON_VERCEL:        # a long-running server scans at startup; on Vercel the scan waits for the first request that needs it
+        _ensure_loaded(app)
     yield
 
 
@@ -64,6 +97,18 @@ app.add_middleware(CORSMiddleware,
                    allow_origins=os.getenv("GHOSTFLEET_CORS", "http://localhost:5173,http://127.0.0.1:5173").split(","),
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=2000)   # a global month of detections is several MB of JSON
+
+
+@app.middleware("http")
+async def _cdn_cache(request: Request, call_next):
+    """Let a CDN in front of the API (Vercel's) keep successful GETs for an hour and serve a stale copy while it refreshes.
+    Browsers always revalidate (max-age=0). This is what makes a serverless deployment usable: the function's own disk
+    cache dies with each instance, the CDN's does not."""
+    response = await call_next(request)
+    if request.method == "GET" and response.status_code == 200 and request.url.path.startswith("/api/") \
+            and "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+    return response
 
 
 # ---------- one error shape everywhere ----------
@@ -111,6 +156,7 @@ async def _unhandled(_: Request, exc: Exception):
 
 
 def svc(request: Request) -> GhostFleetService:
+    _ensure_loaded(request.app)
     s = getattr(request.app.state, "svc", None)
     if s is None:
         raise DataUnavailable(getattr(request.app.state, "load_error", None) or "Data not loaded")
@@ -125,6 +171,7 @@ def get_health():
 
 @app.get("/api/meta", response_model=S.MetaResponse)
 def get_meta(request: Request):
+    _ensure_loaded(request.app)
     s = getattr(request.app.state, "svc", None)
     if s is not None:
         return s.meta()
@@ -136,26 +183,38 @@ def get_meta(request: Request):
 
 
 @app.get("/api/cells", response_model=S.CellsResponse)
-def get_cells(request: Request):
+def get_cells(request: Request, only: str | None = Query(None, pattern="^events$")):
+    """Every analysis cell, or with `?only=events` just the cells that belong to a change event (all the map needs)."""
     s = svc(request)
+    if only == "events":
+        full = s.cells()
+        return S.CellsResponse(is_demo_data=full.is_demo_data, months=full.months,
+                               cells=[c for c in full.cells if c.event_id is not None])
     if len(s.panel.cell_ids) > MAX_MAP_CELLS:
         return _err(422, "TOO_MANY_CELLS", f"Map layer has {len(s.panel.cell_ids)} cells (max {MAX_MAP_CELLS})")
     return s.cells()
 
 
 @app.get("/api/detections", response_model=S.DetectionsResponse)
-def get_detections(request: Request, month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$")):
-    """Vessel detections for one month (default: latest), fetched live from Global Fishing Watch (cached on disk)."""
+def get_detections(request: Request, month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"), compact: bool = False):
+    """Vessel detections for one month (default: latest), fetched live from Global Fishing Watch (cached on disk).
+    `?compact=true` returns the points as `packed` rows: a worldwide month is over 5 MB as objects, about 2 MB packed."""
     if os.getenv("GHOSTFLEET_DATA", "real") == "synthetic":
-        return svc(request).detections(month)
+        r = svc(request).detections(month)
+        if compact:
+            r.packed, r.points = [(p.lat, p.lon, p.unmatched, p.matched) for p in r.points], []
+        return r
     months = month_axis()
     m = month or months[-1]
     if m not in months:
         raise NotFound("Month", m)
-    d = request.app.state.gfw.detections(m)
-    pts = [S.DetectionPoint(lat=p[0], lon=p[1], unmatched=int(p[2]), matched=int(p[3])) for p in d["points"]]
-    return S.DetectionsResponse(is_demo_data=False, month=m, points=pts, fetched_at=d["fetchedAt"],
-                                total_unmatched=sum(p.unmatched for p in pts), total_matched=sum(p.matched for p in pts))
+    d = gfw_live(request).detections(m)
+    rows = [(p[0], p[1], int(p[2]), int(p[3])) for p in d["points"]]
+    totals = {"total_unmatched": sum(r[2] for r in rows), "total_matched": sum(r[3] for r in rows)}
+    if compact:
+        return S.DetectionsResponse(is_demo_data=False, month=m, points=[], packed=rows, fetched_at=d["fetchedAt"], **totals)
+    pts = [S.DetectionPoint(lat=r[0], lon=r[1], unmatched=r[2], matched=r[3]) for r in rows]
+    return S.DetectionsResponse(is_demo_data=False, month=m, points=pts, fetched_at=d["fetchedAt"], **totals)
 
 
 # ---------- live awareness layers (free sources; see ghostfleet/sea.py) ----------
@@ -195,34 +254,34 @@ async def _bad_period(_: Request, exc: BadPeriod):
 @app.get("/api/sea/ais-off", response_model=S.AisOffResponse)
 def get_ais_off(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
     """Vessels that switched AIS off in a period (default: the last 30 days), where it happened most, and labelled hypotheses."""
-    return sea_service.ais_off(request.app.state.sea.ais_off(*period(start, end)))
+    return sea_service.ais_off(sea_watch(request).ais_off(*period(start, end)))
 
 
 @app.get("/api/sea/slicks", response_model=S.SlicksResponse)
 def get_slicks(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
     """Largest possible oil slicks in a period (default: the last 30 days), machine-detected on Sentinel-1 radar (SkyTruth Cerulean)."""
-    return sea_service.slicks(request.app.state.sea.slicks(*period(start, end)))
+    return sea_service.slicks(sea_watch(request).slicks(*period(start, end)))
 
 
 @app.get("/api/sea/protected-fishing", response_model=S.ProtectedFishingResponse)
 def get_protected_fishing(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
     """Apparent fishing inside no-take protected areas in a period. Built by scripts/ingest_sea.py; 503 until that has run."""
     s, e = period(start, end) if (start or end) else (None, None)
-    return sea_service.protected_fishing(request.app.state.sea.protected_fishing(), s, e)
+    return sea_service.protected_fishing(sea_watch(request).protected_fishing(), s, e)
 
 
 @app.get("/api/sea/vessels/search", response_model=S.VesselSearchResponse)
 def search_vessels(request: Request, q: str = Query(..., min_length=3, max_length=60)):
     """Find a ship by name, MMSI, IMO or call sign (Global Fishing Watch vessel identity)."""
     return S.VesselSearchResponse(is_demo_data=False, query=q,
-                                  results=[sea_service.identity(i) for i in request.app.state.sea.search(q.strip())])
+                                  results=[sea_service.identity(i) for i in sea_watch(request).search(q.strip())])
 
 
 @app.get("/api/sea/vessels/{vessel_id}", response_model=S.VesselResponse)
 def get_vessel(vessel_id: str, request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
     """One ship in a period: its path through its recorded events, and where and when it stopped broadcasting."""
     try:
-        return sea_service.vessel(request.app.state.sea.vessel(vessel_id, *period(start, end)))
+        return sea_service.vessel(sea_watch(request).vessel(vessel_id, *period(start, end)))
     except LookupError:
         raise NotFound("Vessel", vessel_id) from None
 
@@ -234,14 +293,16 @@ def get_lane_tile(z: int, x: int, y: int, request: Request, month: str | None = 
         raise NotFound("Tile", f"{z}/{x}/{y}")
     if month and month not in month_axis():
         raise NotFound("Month", month)
-    return Response(request.app.state.sea.lanes_tile(z, x, y, month), media_type="image/png",
-                    headers={"Cache-Control": "public, max-age=86400"})
+    return Response(sea_watch(request).lanes_tile(z, x, y, month), media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})   # a month's lanes never change
 
 
 @app.post("/api/refresh", response_model=S.MetaResponse)
 def refresh(request: Request):
     """Reload the panel from disk after `scripts/ingest_real.py` has pulled new data. Safe to retry."""
-    _try_load(request.app)
+    with _load_lock:
+        _try_load(request.app)
+        request.app.state.loaded = True
     return svc(request).meta()
 
 

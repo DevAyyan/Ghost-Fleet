@@ -63,3 +63,16 @@ Each of these cost time on 2026-11-14. Check here before debugging something tha
   clamped to ≥ 1 in `trend.py`. Keep it that way.
 - On synthetic data the raw-count step flags 0 cells: the fishing-ban/monsoon cycle swamps the Sentinel-1B dip. Show the
   coverage effect as a chart, not as a significance flip.
+
+## Vercel (the API runs as one Python function, `api/index.py`)
+- **Read-only filesystem**: only `/tmp` is writable, and it is per instance. `gfw.py` switches the cache there when the
+  `VERCEL` env var is set (`GHOSTFLEET_CACHE` overrides the location anywhere). Never write next to the code.
+- **4.5 MB response cap**: `/api/detections` is over 5 MB as objects (use `?compact=true`) and `/api/cells` is ~4.5 MB
+  (use `?only=events`). Check the raw size of any new endpoint, not the gzipped size.
+- **The startup hook may not run**, so `app.state.gfw` / `.sea` are created on first use (`gfw_live()`, `sea_watch()`)
+  and the scan is lazy (`_ensure_loaded`). Don't read `request.app.state.*` directly in a route.
+- **CDN caching**: every successful GET under `/api/` gets `s-maxage=3600` unless the route sets its own header. A route
+  whose answer must never be shared between users needs an explicit `Cache-Control: no-store`.
+- `.vercelignore` and the function's `excludeFiles` keep `brag-output/`, `docs/`, `data/raw/` and tests out of the bundle
+  (limit 250 MB unzipped). `.env` is not deployed: set `GLOBAL_FISHING_WATCH` in the Vercel dashboard.
+

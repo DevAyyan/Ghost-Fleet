@@ -43,6 +43,7 @@ export interface DetectionPoint { lat: number; lon: number; unmatched: number; m
 export interface DetectionsResponse extends Envelope {
   month: string;
   points: DetectionPoint[];
+  packed?: PackedDetection[] | null;   // with ?compact=true: the points as rows, and `points` is empty
   totalUnmatched: number;
   totalMatched: number;
   fetchedAt: string | null;
@@ -187,5 +188,7 @@ export interface VesselResponse extends Envelope {
   points: VesselPoint[]; gaps: AisOffEvent[]; counts: Record<string, number>; statements: Statement[]; source: string;
 }
 export interface VesselSearchResponse extends Envelope { query: string; results: VesselIdentity[] }
+
+export type PackedDetection = [number, number, number, number];   // lat, lon, unmatched, matched
 
 export interface ApiErrorBody { error: { code: string; message: string; details?: unknown } }

@@ -21,6 +21,10 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+ON_VERCEL = bool(os.getenv("VERCEL"))
+# Where fetched data is cached. On Vercel the code directory is read-only, so the cache lives in /tmp: it is private to
+# one running instance and disappears when that instance stops. The CDN cache headers in api/main.py do the lasting work there.
+CACHE_ROOT = Path(os.getenv("GHOSTFLEET_CACHE") or ("/tmp/ghostfleet" if ON_VERCEL else ROOT / "data" / "raw"))
 API = "https://gateway.api.globalfishingwatch.org/v3/4wings/report"
 DATASET = "public-global-sar-presence:latest"
 BBOX = (-180.0, -85.0, 180.0, 85.0)   # lon0, lat0, lon1, lat1: every ocean
@@ -59,7 +63,7 @@ class GFWLive:
     _one_report = threading.Lock()   # GFW: one concurrent report per token
 
     def __init__(self, cache_dir: Path | None = None, fresh_hours: float = 6.0, timeout: float = 180):
-        self.cache_dir = cache_dir or ROOT / "data" / "raw" / "gfw" / "global"
+        self.cache_dir = cache_dir or CACHE_ROOT / "gfw" / "global"
         self.fresh_s = fresh_hours * 3600
         self.timeout = timeout
         self._locks: dict[str, threading.Lock] = {}

@@ -1,0 +1,5 @@
+# Python dependencies of the API when it runs as a Vercel function (api/index.py).
+# Keep in step with backend/pyproject.toml ([project] + the "api" extra); uvicorn is not needed on Vercel.
+numpy>=1.26
+fastapi>=0.110
+pydantic>=2.6

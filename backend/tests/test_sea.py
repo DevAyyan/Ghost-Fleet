@@ -136,6 +136,7 @@ def test_empty_lane_tiles_become_transparent_pngs(tmp_path, monkeypatch):
         err.status = 404
         raise err
     monkeypatch.setattr(sea, "_get", refuse)
+    monkeypatch.setattr(sea, "LANE_SEED", tmp_path / "no-seed")
     w = sea.SeaWatch(cache_dir=tmp_path)
     png = w.lanes_tile(3, 3, 0)
     assert png == sea.EMPTY_PNG and png[:4] == b"\x89PNG"
@@ -213,3 +214,50 @@ def test_coordinated_turn_ons_detects_simultaneous_reconnections():
     assert any("Sister fleet sweep" in s.text for s in c.statements)
     assert any("4 Nov 2026, 12:00 UTC" in s.text for s in c.statements)
     assert any("5 Nov 2026, 12:00 UTC" in s.text for s in c.statements)
+
+
+def test_serverless_friendly_responses(monkeypatch, tmp_path):
+    """What a Vercel deployment relies on: CDN cache headers, a compact radar payload, event-only cells, seeded lane tiles."""
+    import ghostfleet.sea as sea
+    with TestClient(app) as c:
+        app.state.sea = FakeSea()
+        r = c.get("/api/sea/slicks")
+        assert "s-maxage=3600" in r.headers["cache-control"] and "max-age=0" in r.headers["cache-control"]
+        assert "s-maxage=2592000" in c.get("/api/sea/lanes/1/0/0.png").headers["cache-control"]
+        assert "cache-control" not in c.get("/api/sea/vessels/nope").headers                     # errors are never cached
+        every, some = c.get("/api/cells").json()["cells"], c.get("/api/cells?only=events").json()["cells"]
+        assert 0 < len(some) < len(every) and all(x["eventId"] for x in some)
+
+        class Radar:
+            def detections(self, month, refresh=False):
+                return {"month": month, "fetchedAt": "2026-11-14T10:00:00+00:00", "points": [[24.3, 66.1, 3, 1], [-34.4, 18.9, 0, 2]]}
+        app.state.gfw = Radar()
+        monkeypatch.setenv("GHOSTFLEET_DATA", "real")           # the live radar path (the synthetic panel has no detections)
+        full, packed = c.get("/api/detections").json(), c.get("/api/detections?compact=true").json()
+        assert packed["points"] == [] and packed["packed"] == [[24.3, 66.1, 3, 1], [-34.4, 18.9, 0, 2]]
+        assert full["packed"] is None and full["points"][1] == {"lat": -34.4, "lon": 18.9, "unmatched": 0, "matched": 2}
+        assert packed["totalUnmatched"] == full["totalUnmatched"] == 3 and packed["totalMatched"] == 3
+        monkeypatch.setenv("GHOSTFLEET_DATA", "synthetic")
+    # a lane tile shipped in data/seed is served without asking GFW or writing anything
+    monkeypatch.setattr(sea, "LANE_SEED", tmp_path / "seed")
+    monkeypatch.setattr(sea, "_get", lambda *a, **k: (_ for _ in ()).throw(AssertionError("GFW must not be called")))
+    month = sea.month_axis()[-1]
+    tile = tmp_path / "seed" / f"{month}-v2" / "1" / "0" / "0.png"
+    tile.parent.mkdir(parents=True)
+    tile.write_bytes(b"\x89PNG seeded")
+    assert sea.SeaWatch(cache_dir=tmp_path / "cache").lanes_tile(1, 0, 0) == b"\x89PNG seeded"
+
+
+def test_app_works_without_the_startup_hook(monkeypatch):
+    """Serverless hosts may never run lifespan: state must build itself on first use, and the scan must run once."""
+    from ghostfleet.api import main
+    for name in ("gfw", "sea", "svc", "loaded", "load_error"):
+        if hasattr(app.state, name):
+            delattr(app.state, name)
+    calls = []
+    real = main._try_load
+    monkeypatch.setattr(main, "_try_load", lambda a: (calls.append(1), real(a))[1])
+    c = TestClient(app)                      # no "with": lifespan does not run
+    assert c.get("/api/meta").json()["eventCount"] >= 0 and c.get("/api/events").status_code == 200
+    assert len(calls) == 1
+    assert isinstance(main.sea_watch(type("R", (), {"app": app})()), main.SeaWatch)

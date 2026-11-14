@@ -163,6 +163,9 @@ class DetectionPoint(Model):
 class DetectionsResponse(Envelope):
     month: str
     points: list[DetectionPoint]
+    packed: list[tuple[float, float, int, int]] | None = Field(
+        default=None, description="With ?compact=true: the same points as [lat, lon, unmatched, matched] rows, and `points` is empty. "
+                                  "Less than half the size, which matters for a worldwide month")
     total_unmatched: int
     total_matched: int
     fetched_at: str | None = Field(default=None, description="UTC time this month was pulled from Global Fishing Watch")

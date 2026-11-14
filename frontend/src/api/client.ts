@@ -1,10 +1,14 @@
 import type {
   AisOffResponse, ProtectedFishingResponse, SlicksResponse, VesselResponse, VesselSearchResponse,
-  ApiErrorBody, CellDetailResponse, CellsResponse, DetectionsResponse, DisproofResponse, DisproofVariant,
+  ApiErrorBody, CellDetailResponse, DetectionPoint, PackedDetection, CellsResponse, DetectionsResponse, DisproofResponse, DisproofVariant,
   EventDetailResponse, EventsResponse, MetaResponse,
 } from "./types";
 
 const BASE = import.meta.env?.VITE_API_BASE ?? "";
+
+export function unpackDetections(rows: PackedDetection[]): DetectionPoint[] {
+  return rows.map(([lat, lon, unmatched, matched]) => ({ lat, lon, unmatched, matched }));
+}
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -38,8 +42,13 @@ async function request<T>(path: string, init?: RequestInit, fetchImpl: typeof fe
 
 export const api = {
   meta: () => request<MetaResponse>("/api/meta"),
-  cells: () => request<CellsResponse>("/api/cells"),
-  detections: (month: string) => request<DetectionsResponse>(`/api/detections?month=${encodeURIComponent(month)}`),
+  /** Only the cells that belong to a change event: all the map draws, and a fraction of the full list. */
+  cells: () => request<CellsResponse>("/api/cells?only=events"),
+  /** Asked for in packed form (a worldwide month is over 5 MB as objects) and unpacked here. */
+  detections: async (month: string): Promise<DetectionsResponse> => {
+    const r = await request<DetectionsResponse>(`/api/detections?month=${encodeURIComponent(month)}&compact=true`);
+    return r.packed ? { ...r, points: unpackDetections(r.packed), packed: null } : r;
+  },
   cell: (id: string) => request<CellDetailResponse>(`/api/cells/${encodeURIComponent(id)}`),
   events: (page = 1, pageSize = 50) => request<EventsResponse>(`/api/events?page=${page}&pageSize=${pageSize}`),
   event: (id: string) => request<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`),

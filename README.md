@@ -50,17 +50,26 @@ The frontend dev server automatically proxies API requests to `http://127.0.0.1:
 
 ---
 
-## Deploy (frontend on Vercel, API on Render)
-The API needs an always-on host: it caches to disk and takes about 10 s to start, which does not suit serverless functions.
+## Deploy on Vercel (frontend and API together)
+Import this repo in Vercel and leave **Root Directory empty** (the repo root). `vercel.json` does the rest: it builds the
+frontend from `frontend/`, serves it as static files, and runs the API as one Python function (`api/index.py`,
+dependencies from `requirements.txt`) that every `/api/*` request is rewritten to.
 
-1. **API on Render**: New → Blueprint → this repo (`render.yaml`). Set `GLOBAL_FISHING_WATCH` in the dashboard.
-   Check that `https://<service>.onrender.com/api/meta` answers.
-2. **Frontend on Vercel**: import this repo with **Root Directory = `frontend`**. `frontend/vercel.json` forwards `/api/*`
-   to the API, so the browser only talks to the Vercel address and no CORS or `VITE_API_BASE` setting is needed.
-   **Edit the `destination` in `frontend/vercel.json` if your Render address is not `ghost-fleet.onrender.com`.**
+Set one environment variable in Vercel, for Production and Preview: `GLOBAL_FISHING_WATCH` (your GFW API token).
+Then check `https://<your-site>/api/health`.
 
-On Render's free plan the service sleeps when idle and its disk cache is wiped on restart, so open the site and click
-through each layer before a demo.
+What is different from running it locally:
+- **The disk cache is temporary.** Vercel's code directory is read-only, so fetched data is cached in `/tmp`, which lasts
+  only as long as one running instance. To make up for that the API marks successful GETs as cacheable by Vercel's CDN
+  for an hour (lane tiles for a month), and the world-view lane tiles for the latest month ship in `data/seed/`.
+- **The first trend request after a cold start takes 10–20 s**, because the worldwide scan runs then (the other layers
+  do not wait for it). Open "Lasting changes" once before a demo.
+- **Functions are limited to 60 s and 4.5 MB per response.** A full year of AIS-off events fetched for the first time
+  can take longer than 60 s; shorter periods are fine.
+- Zooming the shipping lanes into a new area still takes up to ~10 s per tile the first time.
+
+`render.yaml` is kept as an alternative: an always-on host has none of these limits (it runs the API only; point the
+frontend at it with `VITE_API_BASE`).
 
 ## Verification & Tests
 

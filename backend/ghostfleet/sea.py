@@ -24,7 +24,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from .gfw import ROOT, UA, GFWError, _token, month_axis
+from .gfw import CACHE_ROOT, ROOT, UA, GFWError, _token, month_axis
 
 GFW = "https://gateway.api.globalfishingwatch.org/v3"
 CERULEAN = "https://api.cerulean.skytruth.org/collections/public.slick_plus/items"
@@ -43,6 +43,7 @@ SLICK_SOURCES = {1: "VESSEL", 2: "INFRASTRUCTURE", 3: "DARK_VESSEL", 4: "NATURAL
 LANE_RGB = [19, 38, 59]                                     # chart ink
 LANE_RAMP_Z2 = [0, 500, 1200, 3000, 7000, 16000, 40000, 100000, 250000]   # vessel-hours per tile cell at zoom 2
 PROTECTED_FISHING = ROOT / "data" / "processed" / "protected_fishing.json"
+LANE_SEED = ROOT / "data" / "seed" / "lanes"       # world-view lane tiles shipped with the code, so a fresh host shows lanes at once
 
 
 class SeaSourceError(GFWError):
@@ -157,7 +158,7 @@ def slim_vessel_event(e: dict) -> dict:
 
 class SeaWatch:
     def __init__(self, cache_dir: Path | None = None, fresh_hours: float = 6.0):
-        self.cache_dir = cache_dir or ROOT / "data" / "raw" / "sea"
+        self.cache_dir = cache_dir or CACHE_ROOT / "sea"
         self.fresh_s = fresh_hours * 3600
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
@@ -291,6 +292,9 @@ class SeaWatch:
         path = self.cache_dir / "lanes" / f"{month}-v2" / str(z) / str(x) / f"{y}.png"
         if path.exists():
             return path.read_bytes()
+        seed = LANE_SEED / f"{month}-v2" / str(z) / str(x) / f"{y}.png"
+        if seed.exists():
+            return seed.read_bytes()
         yy, mm = map(int, month.split("-"))
         end = f"{yy + 1}-01-01" if mm == 12 else f"{yy}-{mm + 1:02d}-01"
         ramp = [round(v * 4.0 ** (2 - z), 2) for v in LANE_RAMP_Z2]
