@@ -22,3 +22,4 @@ Code & methodology: https://github.com/DevAyyan/Ghost-Fleet
 
 ### Discord / Technical Communities
 Check out Ghost Fleet X: an open-source maritime intelligence engine that tracks vessels operating with their AIS transponders off. Uses Sentinel-1 SAR radar passes, NASA VIIRS radiance, and spatio-temporal graph clustering to calculate concurrent unmonitored presence down to the minute. Every alert is stress-tested across 7 alternative statistical models. Python/FastAPI + React/MapLibre GL.
+
