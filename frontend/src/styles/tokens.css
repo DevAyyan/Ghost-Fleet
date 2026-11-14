@@ -1,0 +1,40 @@
+/* Ghost Fleet X: nautical-chart vernacular.
+   Magenta means "look here", exactly as on a paper chart (lights, cautions, routes).
+   All text colours meet WCAG AA on --paper. */
+:root {
+  --paper: #f3f6f5;          /* chart paper: cool, never cream */
+  --paper-2: #e9eff0;        /* margin / secondary surface */
+  --shoal: #dce9f0;          /* quiet fills, selection */
+  --rule: #c5d1d8;           /* hairlines */
+  --rule-strong: #97a8b4;
+
+  --ink: #13263b;            /* text, primary rules */
+  --sounding: #566676;       /* secondary text (5.3:1 on paper) */
+
+  --magenta: #a3166f;        /* attention: unmatched activity, rising change, primary action */
+  --magenta-tint: #f4dcea;
+  --shelf: #2d6a9f;          /* AIS-matched, falling change */
+  --shelf-tint: #d7e6f2;
+
+  --trend-up: var(--magenta);
+  --trend-down: var(--shelf);
+  --trend-none: var(--sounding);
+  --focus: var(--ink);
+  --warn: #8a5a00;           /* annotations such as the Sentinel-1B outage */
+  --ok: #1f6b4a;
+  --danger: #a3271b;
+  --demo-bg: #ffe066;
+  --demo-text: #2b2100;
+
+  --serif: "Spectral", Georgia, "Times New Roman", serif;
+  --sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* type scale, ratio 1.25 */
+  --fs-xs: 0.8rem; --fs-sm: 0.875rem; --fs-md: 1rem; --fs-lg: 1.25rem; --fs-xl: 1.5625rem; --fs-2xl: 1.953rem;
+  --s-1: 0.25rem; --s-2: 0.5rem; --s-3: 0.75rem; --s-4: 1rem; --s-5: 1.25rem; --s-6: 1.5rem; --s-8: 2rem;
+  --r-1: 2px; --r-2: 3px;
+
+  --header-h: 3.5rem;
+  --rail-w: 20rem;
+  --drawer-w: 29rem;
+}

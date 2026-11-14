@@ -1,0 +1,3826 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ghost Fleet X API",
+    "description": "Maritime change intelligence: investigation leads, never accusations.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/meta": {
+      "get": {
+        "summary": "Get Meta",
+        "operationId": "get_meta_api_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cells": {
+      "get": {
+        "summary": "Get Cells",
+        "operationId": "get_cells_api_cells_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CellsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/detections": {
+      "get": {
+        "summary": "Get Detections",
+        "description": "Vessel detections for one month (default: latest), fetched live from Global Fishing Watch (cached on disk).",
+        "operationId": "get_detections_api_detections_get",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/ais-off": {
+      "get": {
+        "summary": "Get Ais Off",
+        "description": "Vessels that switched AIS off in a period (default: the last 30 days), where it happened most, and labelled hypotheses.",
+        "operationId": "get_ais_off_api_sea_ais_off_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AisOffResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/slicks": {
+      "get": {
+        "summary": "Get Slicks",
+        "description": "Largest possible oil slicks in a period (default: the last 30 days), machine-detected on Sentinel-1 radar (SkyTruth Cerulean).",
+        "operationId": "get_slicks_api_sea_slicks_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlicksResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/protected-fishing": {
+      "get": {
+        "summary": "Get Protected Fishing",
+        "description": "Apparent fishing inside no-take protected areas in a period. Built by scripts/ingest_sea.py; 503 until that has run.",
+        "operationId": "get_protected_fishing_api_sea_protected_fishing_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtectedFishingResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/vessels/search": {
+      "get": {
+        "summary": "Search Vessels",
+        "description": "Find a ship by name, MMSI, IMO or call sign (Global Fishing Watch vessel identity).",
+        "operationId": "search_vessels_api_sea_vessels_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 60,
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VesselSearchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/vessels/{vessel_id}": {
+      "get": {
+        "summary": "Get Vessel",
+        "description": "One ship in a period: its path through its recorded events, and where and when it stopped broadcasting.",
+        "operationId": "get_vessel_api_sea_vessels__vessel_id__get",
+        "parameters": [
+          {
+            "name": "vessel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Vessel Id"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VesselResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/lanes/{z}/{x}/{y}.png": {
+      "get": {
+        "summary": "Get Lane Tile",
+        "description": "Shipping-lane tile: AIS vessel presence for one month (default latest), drawn by Global Fishing Watch (disk-cached).",
+        "operationId": "get_lane_tile_api_sea_lanes__z___x___y__png_get",
+        "parameters": [
+          {
+            "name": "z",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Z"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "X"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Y"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "image/png": {}
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/refresh": {
+      "post": {
+        "summary": "Refresh",
+        "description": "Reload the panel from disk after `scripts/ingest_real.py` has pulled new data. Safe to retry.",
+        "operationId": "refresh_api_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cells/{cell_id}": {
+      "get": {
+        "summary": "Get Cell",
+        "operationId": "get_cell_api_cells__cell_id__get",
+        "parameters": [
+          {
+            "name": "cell_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cell Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CellDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "List Events",
+        "operationId": "list_events_api_events_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Pagesize"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Direction"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Direction"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/events/{event_id}": {
+      "get": {
+        "summary": "Get Event",
+        "operationId": "get_event_api_events__event_id__get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/events/{event_id}/disproof": {
+      "post": {
+        "summary": "Run Disproof",
+        "description": "Pure computation, cached, no stored state: safe to retry.",
+        "operationId": "run_disproof_api_events__event_id__disproof_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DisproofRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisproofResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/events/{event_id}/case-file": {
+      "get": {
+        "summary": "Get Case File",
+        "operationId": "get_case_file_api_events__event_id__case_file_get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CaseFileFormat",
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseFile"
+                }
+              },
+              "application/geo+json": {}
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AisOffEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon",
+            "description": "Where the vessel stopped broadcasting"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "durationHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationhours"
+          },
+          "distanceKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancekm",
+            "description": "Distance between the last position before and the first after the gap"
+          },
+          "vesselName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselname"
+          },
+          "flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "vesselType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesseltype"
+          },
+          "shoreKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shorekm"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "inProtectedArea": {
+            "type": "boolean",
+            "title": "Inprotectedarea"
+          },
+          "inNoTake": {
+            "type": "boolean",
+            "title": "Innotake"
+          },
+          "highSeas": {
+            "type": "boolean",
+            "title": "Highseas"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements",
+            "description": "What was observed, and labelled hypotheses about what might have happened"
+          },
+          "vesselId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselid",
+            "description": "GFW vessel id: open /api/sea/vessels/{vesselId} for the ship's path"
+          },
+          "mmsi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mmsi"
+          },
+          "onLat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onlat",
+            "description": "Where the vessel started broadcasting again"
+          },
+          "onLon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onlon"
+          },
+          "likelyIntentional": {
+            "type": "boolean",
+            "title": "Likelyintentional",
+            "description": "False if GFW does not class the gap as switched off on purpose",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lat",
+          "lon",
+          "start",
+          "end",
+          "durationHours",
+          "distanceKm",
+          "vesselName",
+          "flag",
+          "vesselType",
+          "shoreKm",
+          "place",
+          "inProtectedArea",
+          "inNoTake",
+          "highSeas",
+          "statements"
+        ],
+        "title": "AisOffEvent"
+      },
+      "AisOffHotspot": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "radiusKm": {
+            "type": "number",
+            "title": "Radiuskm"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "topVesselType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topvesseltype"
+          },
+          "topVesselTypeShare": {
+            "type": "number",
+            "title": "Topvesseltypeshare"
+          },
+          "topFlags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Topflags"
+          },
+          "medianDurationHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mediandurationhours"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lat",
+          "lon",
+          "radiusKm",
+          "count",
+          "place",
+          "topVesselType",
+          "topVesselTypeShare",
+          "topFlags",
+          "medianDurationHours",
+          "statements"
+        ],
+        "title": "AisOffHotspot"
+      },
+      "AisOffResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "windowDays": {
+            "type": "integer",
+            "title": "Windowdays"
+          },
+          "recentDays": {
+            "type": "integer",
+            "title": "Recentdays"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "AIS-off events in the whole window"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AisOffEvent"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "Events that started in the last `recentDays` days"
+          },
+          "hotspots": {
+            "items": {
+              "$ref": "#/components/schemas/AisOffHotspot"
+            },
+            "type": "array",
+            "title": "Hotspots",
+            "description": "Places where AIS is switched off most often, over the whole window"
+          },
+          "turnOnClusters": {
+            "items": {
+              "$ref": "#/components/schemas/CoordinatedTurnOn"
+            },
+            "type": "array",
+            "title": "Turnonclusters",
+            "description": "Areas where multiple ships turned AIS back on at the same time and place"
+          },
+          "heat": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Heat",
+            "description": "[lat, lon] of every event in the window, for a density layer"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start",
+            "description": "First day of the period (events are selected by the day the gap began)"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "True if the period held more events than are fetched (15,000)",
+            "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch events API (public-global-gaps-events), gaps classed as likely intentional"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "windowDays",
+          "recentDays",
+          "total",
+          "events",
+          "hotspots",
+          "heat"
+        ],
+        "title": "AisOffResponse"
+      },
+      "CaseFile": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "caseId": {
+            "type": "string",
+            "title": "Caseid"
+          },
+          "generatedAt": {
+            "type": "string",
+            "title": "Generatedat"
+          },
+          "formatVersion": {
+            "type": "string",
+            "const": "1",
+            "title": "Formatversion",
+            "default": "1"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Statement"
+          },
+          "whatChanged": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Whatchanged"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Evidence"
+          },
+          "alternativeExplanations": {
+            "items": {
+              "$ref": "#/components/schemas/Explanation"
+            },
+            "type": "array",
+            "title": "Alternativeexplanations"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence"
+          },
+          "recommendedAction": {
+            "$ref": "#/components/schemas/Statement"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          },
+          "dataSources": {
+            "items": {
+              "$ref": "#/components/schemas/DataSource"
+            },
+            "type": "array",
+            "title": "Datasources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "caseId",
+          "generatedAt",
+          "summary",
+          "whatChanged",
+          "evidence",
+          "alternativeExplanations",
+          "confidence",
+          "recommendedAction",
+          "limitations",
+          "dataSources"
+        ],
+        "title": "CaseFile"
+      },
+      "CaseFileFormat": {
+        "type": "string",
+        "enum": [
+          "json",
+          "geojson"
+        ],
+        "title": "CaseFileFormat"
+      },
+      "CellDetailResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "cell": {
+            "$ref": "#/components/schemas/CellSummary"
+          },
+          "waterfall": {
+            "items": {
+              "$ref": "#/components/schemas/WaterfallStep"
+            },
+            "type": "array",
+            "title": "Waterfall"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/MonthPoint"
+            },
+            "type": "array",
+            "title": "Series"
+          },
+          "neighborIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Neighborids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "cell",
+          "waterfall",
+          "series",
+          "neighborIds"
+        ],
+        "title": "CellDetailResponse"
+      },
+      "CellSummary": {
+        "properties": {
+          "cellId": {
+            "type": "string",
+            "title": "Cellid"
+          },
+          "boundary": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Boundary",
+            "description": "Closed ring of [lon, lat]"
+          },
+          "center": {
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Center"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/Trend"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "isSignificant": {
+            "type": "boolean",
+            "title": "Issignificant"
+          },
+          "eventId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventid"
+          },
+          "msdiSeries": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Msdiseries",
+            "description": "Aligned to meta.months"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cellId",
+          "boundary",
+          "center",
+          "trend",
+          "q",
+          "isSignificant",
+          "eventId",
+          "msdiSeries"
+        ],
+        "title": "CellSummary"
+      },
+      "CellsResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "months": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/CellSummary"
+            },
+            "type": "array",
+            "title": "Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "months",
+          "cells"
+        ],
+        "title": "CellsResponse"
+      },
+      "Confidence": {
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/ConfidenceLevel"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "reasons"
+        ],
+        "title": "Confidence"
+      },
+      "ConfidenceLevel": {
+        "type": "string",
+        "enum": [
+          "LOW",
+          "MODERATE",
+          "HIGH"
+        ],
+        "title": "ConfidenceLevel"
+      },
+      "CoordinatedTurnOn": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat",
+            "description": "Centroid latitude of the dark operational area"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon",
+            "description": "Centroid longitude of the dark operational area"
+          },
+          "enterLat": {
+            "type": "number",
+            "title": "Enterlat",
+            "description": "Centroid latitude where vessels entered the area and switched AIS off"
+          },
+          "enterLon": {
+            "type": "number",
+            "title": "Enterlon",
+            "description": "Centroid longitude where vessels entered the area and switched AIS off"
+          },
+          "exitLat": {
+            "type": "number",
+            "title": "Exitlat",
+            "description": "Centroid latitude where vessels exited the area and switched AIS back on"
+          },
+          "exitLon": {
+            "type": "number",
+            "title": "Exitlon",
+            "description": "Centroid longitude where vessels exited the area and switched AIS back on"
+          },
+          "radiusKm": {
+            "type": "number",
+            "title": "Radiuskm"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "sharedHours": {
+            "type": "number",
+            "title": "Sharedhours",
+            "description": "Hours vessels spent concurrently operating dark inside the area together"
+          },
+          "spanHours": {
+            "type": "number",
+            "title": "Spanhours",
+            "description": "Time window across which vessels exited and restored AIS"
+          },
+          "coPresenceStart": {
+            "type": "string",
+            "title": "Copresencestart",
+            "description": "Exact UTC date and time when all vessels were concurrently dark in the area (start of overlap)"
+          },
+          "coPresenceEnd": {
+            "type": "string",
+            "title": "Copresenceend",
+            "description": "Exact UTC date and time when all vessels were concurrently dark in the area (end of overlap)"
+          },
+          "earliest": {
+            "type": "string",
+            "title": "Earliest",
+            "description": "Earliest exit timestamp (AIS turned on)"
+          },
+          "latest": {
+            "type": "string",
+            "title": "Latest",
+            "description": "Latest exit timestamp (AIS turned on)"
+          },
+          "earliestEnter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliestenter"
+          },
+          "latestEnter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestenter"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "topFlags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Topflags"
+          },
+          "vesselTypes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Vesseltypes"
+          },
+          "vessels": {
+            "items": {
+              "$ref": "#/components/schemas/CoordinatedTurnOnVessel"
+            },
+            "type": "array",
+            "title": "Vessels"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lat",
+          "lon",
+          "enterLat",
+          "enterLon",
+          "exitLat",
+          "exitLon",
+          "radiusKm",
+          "count",
+          "sharedHours",
+          "spanHours",
+          "coPresenceStart",
+          "coPresenceEnd",
+          "earliest",
+          "latest",
+          "place",
+          "topFlags",
+          "vesselTypes",
+          "vessels",
+          "statements"
+        ],
+        "title": "CoordinatedTurnOn"
+      },
+      "CoordinatedTurnOnVessel": {
+        "properties": {
+          "vesselId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselid"
+          },
+          "vesselName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselname"
+          },
+          "vesselType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesseltype"
+          },
+          "flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "durationHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationhours"
+          },
+          "distanceKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancekm"
+          },
+          "enterLat": {
+            "type": "number",
+            "title": "Enterlat"
+          },
+          "enterLon": {
+            "type": "number",
+            "title": "Enterlon"
+          },
+          "exitLat": {
+            "type": "number",
+            "title": "Exitlat"
+          },
+          "exitLon": {
+            "type": "number",
+            "title": "Exitlon"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat",
+            "description": "Exit latitude (where AIS was turned back on)"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon",
+            "description": "Exit longitude (where AIS was turned back on)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enterLat",
+          "enterLon",
+          "exitLat",
+          "exitLon",
+          "lat",
+          "lon"
+        ],
+        "title": "CoordinatedTurnOnVessel"
+      },
+      "DataSource": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "role",
+          "url"
+        ],
+        "title": "DataSource"
+      },
+      "DetectionPoint": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "unmatched": {
+            "type": "integer",
+            "title": "Unmatched"
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon",
+          "unmatched",
+          "matched"
+        ],
+        "title": "DetectionPoint"
+      },
+      "DetectionsResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/DetectionPoint"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "totalUnmatched": {
+            "type": "integer",
+            "title": "Totalunmatched"
+          },
+          "totalMatched": {
+            "type": "integer",
+            "title": "Totalmatched"
+          },
+          "fetchedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetchedat",
+            "description": "UTC time this month was pulled from Global Fishing Watch"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch public-global-sar-presence (Sentinel-1 SAR), 0.1\u00b0 bins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "month",
+          "points",
+          "totalUnmatched",
+          "totalMatched"
+        ],
+        "title": "DetectionsResponse"
+      },
+      "Direction": {
+        "type": "string",
+        "enum": [
+          "INCREASING",
+          "DECREASING",
+          "NONE"
+        ],
+        "title": "Direction"
+      },
+      "DisproofRequest": {
+        "properties": {
+          "variants": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DisproofVariant"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variants",
+            "description": "Omit to run all variants"
+          }
+        },
+        "type": "object",
+        "title": "DisproofRequest"
+      },
+      "DisproofResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "eventId": {
+            "type": "string",
+            "title": "Eventid"
+          },
+          "cellId": {
+            "type": "string",
+            "title": "Cellid"
+          },
+          "baseline": {
+            "$ref": "#/components/schemas/Trend"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantOutcome"
+            },
+            "type": "array",
+            "title": "Variants"
+          },
+          "survived": {
+            "type": "integer",
+            "title": "Survived"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "survivalRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Survivalrate"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Statement"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "eventId",
+          "cellId",
+          "baseline",
+          "variants",
+          "survived",
+          "total",
+          "survivalRate",
+          "verdict"
+        ],
+        "title": "DisproofResponse"
+      },
+      "DisproofVariant": {
+        "type": "string",
+        "enum": [
+          "SEASONAL_MK",
+          "TRIM_START",
+          "TRIM_END",
+          "STRICT_COVERAGE",
+          "COARSER_CELLS",
+          "NEIGHBOR_CONTROL",
+          "STRICT_ALPHA"
+        ],
+        "title": "DisproofVariant"
+      },
+      "EpistemicLabel": {
+        "type": "string",
+        "enum": [
+          "OBSERVATION",
+          "INFERENCE",
+          "HYPOTHESIS",
+          "RECOMMENDATION"
+        ],
+        "title": "EpistemicLabel"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse"
+      },
+      "EventDetailResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "event": {
+            "$ref": "#/components/schemas/EventSummary"
+          },
+          "waterfall": {
+            "items": {
+              "$ref": "#/components/schemas/WaterfallStep"
+            },
+            "type": "array",
+            "title": "Waterfall"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/MonthPoint"
+            },
+            "type": "array",
+            "title": "Series"
+          },
+          "oppositeNeighbors": {
+            "items": {
+              "$ref": "#/components/schemas/OppositeNeighbor"
+            },
+            "type": "array",
+            "title": "Oppositeneighbors"
+          },
+          "explanations": {
+            "items": {
+              "$ref": "#/components/schemas/Explanation"
+            },
+            "type": "array",
+            "title": "Explanations"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence"
+          },
+          "recommendedAction": {
+            "$ref": "#/components/schemas/Statement"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "event",
+          "waterfall",
+          "series",
+          "oppositeNeighbors",
+          "explanations",
+          "confidence",
+          "recommendedAction",
+          "statements"
+        ],
+        "title": "EventDetailResponse"
+      },
+      "EventSummary": {
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "title": "Eventid"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "leadCellId": {
+            "type": "string",
+            "title": "Leadcellid"
+          },
+          "cellIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cellids"
+          },
+          "pctPerYear": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pctperyear"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "maxAbsZ": {
+            "type": "number",
+            "title": "Maxabsz"
+          },
+          "headline": {
+            "$ref": "#/components/schemas/Statement"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place",
+            "description": "Approximate sea name for the lead cell (reading aid, not a boundary)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "eventId",
+          "rank",
+          "direction",
+          "leadCellId",
+          "cellIds",
+          "pctPerYear",
+          "q",
+          "maxAbsZ",
+          "headline"
+        ],
+        "title": "EventSummary"
+      },
+      "EventsResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EventSummary"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "data",
+          "pagination"
+        ],
+        "title": "EventsResponse"
+      },
+      "Explanation": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share",
+            "description": "Share of the apparent change attributed to this explanation (0-1)"
+          },
+          "label": {
+            "$ref": "#/components/schemas/EpistemicLabel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text",
+          "share",
+          "label"
+        ],
+        "title": "Explanation"
+      },
+      "MetaResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "sourceNote": {
+            "type": "string",
+            "title": "Sourcenote"
+          },
+          "months": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "alpha": {
+            "type": "number",
+            "title": "Alpha"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepInfo"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "alertsByStep": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/StepId"
+            },
+            "type": "object",
+            "title": "Alertsbystep",
+            "description": "Cells each step would flag after FDR (naive vs corrected)"
+          },
+          "cellCount": {
+            "type": "integer",
+            "title": "Cellcount"
+          },
+          "eventCount": {
+            "type": "integer",
+            "title": "Eventcount"
+          },
+          "sensors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sensors"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          },
+          "fetchedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetchedat",
+            "description": "UTC time the live data was pulled (null for demo data)"
+          },
+          "cellSizeDeg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cellsizedeg",
+            "description": "Analysis cell size in degrees"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "sourceNote",
+          "months",
+          "alpha",
+          "steps",
+          "alertsByStep",
+          "cellCount",
+          "eventCount",
+          "sensors",
+          "disclaimer"
+        ],
+        "title": "MetaResponse"
+      },
+      "MonthPoint": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "unmatched": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmatched"
+          },
+          "matched": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched"
+          },
+          "opportunities": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opportunities"
+          },
+          "aisReception": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aisreception"
+          },
+          "wind": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind"
+          },
+          "chl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chl"
+          },
+          "raw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw"
+          },
+          "msdi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Msdi"
+          },
+          "aisCorrected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aiscorrected"
+          },
+          "seasonAdjusted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seasonadjusted"
+          },
+          "environmentAdjusted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environmentadjusted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "unmatched",
+          "matched",
+          "opportunities",
+          "aisReception",
+          "wind",
+          "chl",
+          "raw",
+          "msdi",
+          "aisCorrected",
+          "seasonAdjusted",
+          "environmentAdjusted"
+        ],
+        "title": "MonthPoint"
+      },
+      "OilSlick": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "areaKm2": {
+            "type": "number",
+            "title": "Areakm2"
+          },
+          "lengthKm": {
+            "type": "number",
+            "title": "Lengthkm"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "possibleSource": {
+            "type": "string",
+            "enum": [
+              "VESSEL",
+              "INFRASTRUCTURE",
+              "DARK_VESSEL",
+              "NATURAL",
+              "UNKNOWN"
+            ],
+            "title": "Possiblesource"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lat",
+          "lon",
+          "time",
+          "areaKm2",
+          "lengthKm",
+          "confidence",
+          "possibleSource",
+          "place",
+          "url",
+          "statements"
+        ],
+        "title": "OilSlick"
+      },
+      "OppositeNeighbor": {
+        "properties": {
+          "cellId": {
+            "type": "string",
+            "title": "Cellid"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "pctPerYear": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pctperyear"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cellId",
+          "direction",
+          "pctPerYear",
+          "q"
+        ],
+        "title": "OppositeNeighbor"
+      },
+      "Pagination": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "pageSize": {
+            "type": "integer",
+            "title": "Pagesize"
+          },
+          "totalItems": {
+            "type": "integer",
+            "title": "Totalitems"
+          },
+          "totalPages": {
+            "type": "integer",
+            "title": "Totalpages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "pageSize",
+          "totalItems",
+          "totalPages"
+        ],
+        "title": "Pagination"
+      },
+      "ProtectedFishingEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "durationHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationhours"
+          },
+          "vesselName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselname"
+          },
+          "flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "vesselType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesseltype"
+          },
+          "shoreKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shorekm"
+          },
+          "fullNoTake": {
+            "type": "boolean",
+            "title": "Fullnotake",
+            "description": "True if the whole area is no-take; false if only part of it is"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          },
+          "vesselId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lat",
+          "lon",
+          "start",
+          "end",
+          "durationHours",
+          "vesselName",
+          "flag",
+          "vesselType",
+          "shoreKm",
+          "fullNoTake",
+          "place",
+          "statements"
+        ],
+        "title": "ProtectedFishingEvent"
+      },
+      "ProtectedFishingResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "days": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "scanned": {
+            "type": "integer",
+            "title": "Scanned",
+            "description": "Apparent-fishing events examined for those days"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ProtectedFishingEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start",
+            "description": "Period filter applied to `events` (`days` lists every day that has been scanned)"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch events API (public-global-fishing-events) tagged inside no-take marine protected areas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "days",
+          "scanned",
+          "events"
+        ],
+        "title": "ProtectedFishingResponse"
+      },
+      "SlicksResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "windowDays": {
+            "type": "integer",
+            "title": "Windowdays"
+          },
+          "totalMatched": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalmatched",
+            "description": "Slicks above the size and confidence floor in the window; the largest are returned"
+          },
+          "slicks": {
+            "items": {
+              "$ref": "#/components/schemas/OilSlick"
+            },
+            "type": "array",
+            "title": "Slicks"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "SkyTruth Cerulean (machine-detected on Sentinel-1 radar; not verified by a person)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "windowDays",
+          "totalMatched",
+          "slicks"
+        ],
+        "title": "SlicksResponse"
+      },
+      "Statement": {
+        "properties": {
+          "label": {
+            "$ref": "#/components/schemas/EpistemicLabel"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "text"
+        ],
+        "title": "Statement"
+      },
+      "StepId": {
+        "type": "string",
+        "enum": [
+          "RAW",
+          "COVERAGE",
+          "AIS_RECEPTION",
+          "SEASON",
+          "ENVIRONMENT"
+        ],
+        "title": "StepId"
+      },
+      "StepInfo": {
+        "properties": {
+          "step": {
+            "$ref": "#/components/schemas/StepId"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "label"
+        ],
+        "title": "StepInfo"
+      },
+      "Trend": {
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "pctPerYear": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pctperyear",
+            "description": "Sen's slope \u00d712 as % of reference level"
+          },
+          "slopePerMonth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slopepermonth"
+          },
+          "slopeCi": {
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Slopeci"
+          },
+          "p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P"
+          },
+          "z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          }
+        },
+        "type": "object",
+        "required": [
+          "direction",
+          "pctPerYear",
+          "slopePerMonth",
+          "slopeCi",
+          "p",
+          "z",
+          "n"
+        ],
+        "title": "Trend"
+      },
+      "VariantOutcome": {
+        "properties": {
+          "variant": {
+            "$ref": "#/components/schemas/DisproofVariant"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/Trend"
+          },
+          "alpha": {
+            "type": "number",
+            "title": "Alpha"
+          },
+          "survived": {
+            "type": "boolean",
+            "title": "Survived"
+          }
+        },
+        "type": "object",
+        "required": [
+          "variant",
+          "description",
+          "trend",
+          "alpha",
+          "survived"
+        ],
+        "title": "VariantOutcome"
+      },
+      "VesselIdentity": {
+        "properties": {
+          "vesselId": {
+            "type": "string",
+            "title": "Vesselid"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "mmsi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mmsi"
+          },
+          "imo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imo"
+          },
+          "callsign": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callsign"
+          },
+          "gear": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Gear"
+          },
+          "lengthM": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lengthm"
+          },
+          "tonnageGt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tonnagegt"
+          },
+          "transmitsFrom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transmitsfrom",
+            "description": "First AIS transmission GFW holds for this ship"
+          },
+          "transmitsTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transmitsto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vesselId",
+          "name",
+          "flag",
+          "mmsi",
+          "imo",
+          "callsign",
+          "gear",
+          "lengthM",
+          "tonnageGt",
+          "transmitsFrom",
+          "transmitsTo"
+        ],
+        "title": "VesselIdentity"
+      },
+      "VesselPoint": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "title": "Time"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fishing",
+              "loitering",
+              "port_visit",
+              "encounter",
+              "gap_off",
+              "gap_on"
+            ],
+            "title": "Kind",
+            "description": "What the ship was recorded doing. The stretch from a gap_off point to the next gap_on point was sailed unseen"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Port name, or the other vessel in an encounter"
+          },
+          "eventId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "lat",
+          "lon",
+          "kind",
+          "label"
+        ],
+        "title": "VesselPoint"
+      },
+      "VesselResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "True if the ship had more events in the period than are fetched (3,000)"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/VesselIdentity"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/VesselPoint"
+            },
+            "type": "array",
+            "title": "Points",
+            "description": "The ship's recorded events in time order. Joined up, they are its path"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/AisOffEvent"
+            },
+            "type": "array",
+            "title": "Gaps",
+            "description": "Every time it stopped broadcasting in the period: where, when, for how long, and where it reappeared"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch vessel identity and events APIs. Raw AIS tracks are not part of the free data."
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "start",
+          "end",
+          "truncated",
+          "identity",
+          "points",
+          "gaps",
+          "counts",
+          "statements"
+        ],
+        "title": "VesselResponse"
+      },
+      "VesselSearchResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/VesselIdentity"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "query",
+          "results"
+        ],
+        "title": "VesselSearchResponse"
+      },
+      "WaterfallStep": {
+        "properties": {
+          "step": {
+            "$ref": "#/components/schemas/StepId"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/Trend"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q",
+            "description": "BH-FDR q-value across all cells for this step"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "label",
+          "trend",
+          "q"
+        ],
+        "title": "WaterfallStep"
+      }
+    }
+  }
+}
