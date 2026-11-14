@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Ghost Fleet X — Brag Video</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: #080c14;
+        color: #f1f5f9;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 40%, #0e1626 0%, #060911 100%);
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      /* ── Global Telemetry HUD ── */
+      #hud-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 80;
+        font-family: 'JetBrains Mono', monospace;
+      }
+
+      .hud-tl {
+        position: absolute;
+        top: 36px;
+        left: 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .hud-title {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: #38bdf8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .hud-dot {
+        width: 8px;
+        height: 8px;
+        background: #38bdf8;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #38bdf8;
+      }
+
+      .hud-badge {
+        font-size: 13px;
+        color: rgba(241, 245, 249, 0.75);
+        letter-spacing: 1px;
+      }
+
+      .hud-tr {
+        position: absolute;
+        top: 36px;
+        right: 48px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 8px 16px;
+        background: rgba(12, 16, 23, 0.85);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 6px;
+        font-size: 13px;
+        color: #f1f5f9;
+        letter-spacing: 1px;
+      }
+
+      .hud-coords {
+        color: #38bdf8;
+        font-weight: 700;
+      }
+
+      .hud-bl {
+        position: absolute;
+        bottom: 36px;
+        left: 48px;
+        font-size: 13px;
+        color: rgba(241, 245, 249, 0.75);
+        letter-spacing: 1px;
+      }
+
+      .hud-br {
+        position: absolute;
+        bottom: 36px;
+        right: 48px;
+        font-size: 13px;
+        color: #94a3b8;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+      }
+
+      /* ── Shared Card Styles ── */
+      .telemetry-card {
+        background: rgba(15, 23, 42, 0.88);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        backdrop-filter: blur(16px);
+        border-radius: 12px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(56, 189, 248, 0.15);
+        padding: 28px 36px;
+      }
+
+      /* ── Scene 1: The Hook ── */
+      #scene-1 {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+      }
+
+      .hook-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 4px;
+        color: #f59e0b;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        padding: 6px 16px;
+        border-radius: 6px;
+        margin-bottom: 24px;
+        text-transform: uppercase;
+      }
+
+      .hook-headline {
+        font-size: 68px;
+        font-weight: 900;
+        letter-spacing: -1.5px;
+        text-align: center;
+        line-height: 1.1;
+        max-width: 1100px;
+        background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .hook-alert-box {
+        margin-top: 36px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 28px;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        border-radius: 8px;
+        font-family: 'JetBrains Mono', monospace;
+        color: #fca5a5;
+        font-size: 16px;
+      }
+
+      .pulse-dot {
+        width: 12px;
+        height: 12px;
+        background: #ef4444;
+        border-radius: 50%;
+        box-shadow: 0 0 16px #ef4444;
+      }
+
+      /* ── Scene 2: Coordinated Dark Operations ── */
+      #scene-2 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 120px;
+        z-index: 15;
+      }
+
+      .left-col {
+        max-width: 680px;
+      }
+
+      .scene-title-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        letter-spacing: 3px;
+        color: #38bdf8;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .scene-heading {
+        font-size: 48px;
+        font-weight: 800;
+        line-height: 1.15;
+        margin-bottom: 20px;
+      }
+
+      .scene-sub {
+        font-size: 20px;
+        line-height: 1.5;
+        color: #94a3b8;
+      }
+
+      .cluster-card {
+        width: 580px;
+      }
+
+      .cluster-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .cluster-pill {
+        background: #f59e0b;
+        color: #0c1017;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 13px;
+        padding: 4px 12px;
+        border-radius: 4px;
+      }
+
+      .cluster-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        font-size: 15px;
+      }
+
+      .cluster-row .label {
+        color: #94a3b8;
+      }
+
+      .cluster-row .val {
+        font-family: 'JetBrains Mono', monospace;
+        color: #f1f5f9;
+        font-weight: 600;
+      }
+
+      .highlight-box {
+        margin-top: 18px;
+        padding: 14px;
+        background: rgba(245, 158, 11, 0.1);
+        border-left: 3px solid #f59e0b;
+        font-size: 14px;
+        color: #fde68a;
+      }
+
+      /* ── Scene 3: Spaceborne Radar & Reserves ── */
+      #scene-3 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 120px;
+        z-index: 20;
+      }
+
+      .sensor-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        width: 600px;
+      }
+
+      .sensor-card {
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 10px;
+        padding: 22px 28px;
+      }
+
+      .sensor-top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .sensor-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 4px;
+      }
+
+      .badge-radar { background: #38bdf8; color: #080c14; }
+      .badge-slick { background: #b91c1c; color: #ffffff; }
+      .badge-mpa { background: #10b981; color: #080c14; }
+
+      .sensor-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #f1f5f9;
+      }
+
+      .sensor-desc {
+        font-size: 14px;
+        color: #94a3b8;
+        line-height: 1.4;
+      }
+
+      /* ── Scene 4: The 7 Alternative Analyses (Disproof Lab) ── */
+      #scene-4 {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 25;
+      }
+
+      .lab-container {
+        width: 1080px;
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        border-radius: 14px;
+        padding: 36px 48px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.7), 0 0 40px rgba(56, 189, 248, 0.12);
+      }
+
+      .lab-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-bottom: 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 16px;
+      }
+
+      .lab-title {
+        font-size: 28px;
+        font-weight: 800;
+      }
+
+      .lab-subtitle {
+        font-size: 15px;
+        color: #94a3b8;
+        margin-top: 4px;
+      }
+
+      .lab-verdict {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 16px;
+        font-weight: 700;
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        padding: 6px 16px;
+        border-radius: 6px;
+      }
+
+      .lab-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .lab-table tr {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .lab-table td {
+        padding: 10px 14px;
+        font-size: 15px;
+      }
+
+      .lab-table td.name {
+        font-family: 'JetBrains Mono', monospace;
+        color: #38bdf8;
+        font-size: 13px;
+        width: 200px;
+      }
+
+      .lab-table td.desc {
+        color: #cbd5e1;
+      }
+
+      .lab-table td.status {
+        text-align: right;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 14px;
+        color: #34d399;
+      }
+
+      /* ── Scene 5: Outro / Title Slam ── */
+      #scene-5 {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 30;
+      }
+
+      .logo-title {
+        font-size: 88px;
+        font-weight: 900;
+        letter-spacing: -2px;
+        line-height: 1;
+        background: linear-gradient(180deg, #ffffff 0%, #38bdf8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .logo-subtitle {
+        font-size: 26px;
+        font-weight: 500;
+        color: #cbd5e1;
+        margin-top: 20px;
+        letter-spacing: 0.5px;
+      }
+
+      .tags-row {
+        display: flex;
+        gap: 14px;
+        margin-top: 36px;
+      }
+
+      .tech-pill {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        padding: 8px 18px;
+        background: rgba(30, 41, 59, 0.85);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 999px;
+        color: #f1f5f9;
+      }
+
+      .outro-link {
+        margin-top: 32px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 15px;
+        color: #38bdf8;
+        letter-spacing: 1px;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-width="1920"
+      data-height="1080"
+      data-duration="20"
+    >
+      <!-- Background Nautical Radar SVG -->
+      <svg id="radar-svg" data-layout-allow-overflow width="1920" height="1080" style="position: absolute; inset: 0; pointer-events: none; opacity: 0.85;">
+        <circle cx="960" cy="540" r="160" fill="none" stroke="#38bdf8" stroke-opacity="0.12" stroke-width="1" />
+        <circle cx="960" cy="540" r="320" fill="none" stroke="#38bdf8" stroke-opacity="0.12" stroke-width="1" />
+        <circle cx="960" cy="540" r="480" fill="none" stroke="#38bdf8" stroke-opacity="0.10" stroke-width="1" />
+        <line x1="960" y1="0" x2="960" y2="1080" stroke="#38bdf8" stroke-opacity="0.07" stroke-width="1" />
+        <line x1="0" y1="540" x2="1920" y2="540" stroke="#38bdf8" stroke-opacity="0.07" stroke-width="1" />
+        <g id="radar-beam" data-layout-allow-overflow style="transform-origin: 960px 540px;">
+          <line x1="960" y1="540" x2="960" y2="60" stroke="#38bdf8" stroke-opacity="0.4" stroke-width="2" />
+          <polygon points="960,540 920,60 960,60" fill="#38bdf8" fill-opacity="0.07" />
+        </g>
+      </svg>
+
+      <!-- Telemetry HUD Overlay -->
+      <div id="hud-overlay">
+        <div class="hud-tl">
+          <div class="hud-title"><div class="hud-dot"></div> GHOST FLEET X // GLOBAL MARITIME DOMAIN</div>
+          <div class="hud-badge">SENTINEL-1 SAR · NASA VIIRS · GLOBAL FISHING WATCH</div>
+        </div>
+        <div class="hud-tr">
+          <span>LAT/LON:</span>
+          <span class="hud-coords" id="ticker-coords">23°14'N 067°05'E</span>
+        </div>
+        <div class="hud-bl">EPOCH: 2026-11-14 // REAL-TIME DECISION SUPPORT</div>
+        <div class="hud-br">INVESTIGATION LEADS · NEVER ACCUSATIONS</div>
+      </div>
+
+      <!-- ── Scene 1: The Hook (0.0s – 4.0s) ── -->
+      <section id="scene-1" class="clip">
+        <div id="hook-tag" class="hook-tag">TACTICAL MARITIME ANOMALY DETECTED</div>
+        <h1 id="hook-headline" class="hook-headline">WHAT HAPPENS WHEN SHIPS DELIBERATELY GO DARK?</h1>
+        <div id="hook-alert" class="hook-alert-box">
+          <div class="pulse-dot"></div>
+          <span>AIS SIGNAL TERMINATED: 4 VESSELS CEASE BROADCASTING IN CONCERT</span>
+        </div>
+      </section>
+
+      <!-- ── Scene 2: Coordinated Dark Operations (4.0s – 8.5s) ── -->
+      <section id="scene-2" class="clip" style="opacity: 0;">
+        <div class="left-col" id="col-dark-info">
+          <div class="scene-title-badge">⚡ SPATIO-TEMPORAL CLUSTER ANALYSIS</div>
+          <h2 class="scene-heading">COORDINATED DARK OPERATIONS</h2>
+          <p class="scene-sub">Vessels shut down transponders upon entering an unmonitored corridor, operate together inside, and restore AIS in unison upon exit.</p>
+        </div>
+        <div class="telemetry-card cluster-card" id="card-dark-cluster">
+          <div class="cluster-header">
+            <span class="cluster-pill">CLUSTER #01 · ARABIAN SEA SHELF</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #f59e0b;">HIGH PROBABILITY</span>
+          </div>
+          <div class="cluster-row">
+            <span class="label">Vessels Involved</span>
+            <span class="val">4 (2 Bunker Tankers, 2 Fishing)</span>
+          </div>
+          <div class="cluster-row">
+            <span class="label">All Dark Together</span>
+            <span class="val" style="color: #38bdf8;">14 Nov, 08:41 UTC → 15 Nov, 22:30 UTC</span>
+          </div>
+          <div class="cluster-row">
+            <span class="label">Concurrent Dark Presence</span>
+            <span class="val">37 hours 49 minutes</span>
+          </div>
+          <div class="cluster-row">
+            <span class="label">Area Spread</span>
+            <span class="val">Within 48 km</span>
+          </div>
+          <div class="highlight-box">
+            <strong>HYPOTHESIS:</strong> Coordinated off-grid rendezvous & unmonitored fuel transshipment inside high-risk zone.
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Scene 3: Spaceborne Radar & Marine Reserves (8.5s – 13.0s) ── -->
+      <section id="scene-3" class="clip" style="opacity: 0;">
+        <div class="left-col" id="col-radar-info">
+          <div class="scene-title-badge">🛰️ ORBITAL RADAR & RESERVE PROTECTION</div>
+          <h2 class="scene-heading">UNCOVERED BY SPACEBORNE RADAR</h2>
+          <p class="scene-sub">No AIS? Earth observation satellites capture physical surface wakes, nighttime light emissions, and reserve incursions from orbit.</p>
+        </div>
+        <div class="sensor-grid" id="grid-sensors">
+          <div class="sensor-card" id="sensor-1">
+            <div class="sensor-top">
+              <span class="sensor-badge badge-radar">SENTINEL-1 SAR</span>
+              <span class="sensor-title">Synthetic Aperture Radar</span>
+            </div>
+            <p class="sensor-desc">Day/night cloud-penetrating radar pulses map ship structures and surface water dampening.</p>
+          </div>
+          <div class="sensor-card" id="sensor-2">
+            <div class="sensor-top">
+              <span class="sensor-badge badge-slick">CERULEAN ML</span>
+              <span class="sensor-title">42 km Unmatched Oil Slick</span>
+            </div>
+            <p class="sensor-desc">Discharge wake traced back to a vessel source with zero matching AIS transmissions.</p>
+          </div>
+          <div class="sensor-card" id="sensor-3">
+            <div class="sensor-top">
+              <span class="sensor-badge badge-mpa">WDPA PROTECTED</span>
+              <span class="sensor-title">Strict No-Take Reserve Filter</span>
+            </div>
+            <p class="sensor-desc">Apparent fishing operations classified inside marine conservation zones.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Scene 4: The 7 Alternative Analyses (13.0s – 16.8s) ── -->
+      <section id="scene-4" class="clip" style="opacity: 0;">
+        <div class="lab-container" id="disproof-box">
+          <div class="lab-header">
+            <div>
+              <h3 class="lab-title">TRY TO DISPROVE LAB</h3>
+              <p class="lab-subtitle">Rerunning test under 7 defensible alternative analytical models</p>
+            </div>
+            <div class="lab-verdict" id="lab-verdict">✓ ROBUST (7/7 SURVIVED)</div>
+          </div>
+          <table class="lab-table">
+            <tr id="row-1">
+              <td class="name">SEASONAL_MK</td>
+              <td class="desc">Seasonal Mann-Kendall instead of monthly anomalies</td>
+              <td class="status">✓ Survived (p &lt; 0.001)</td>
+            </tr>
+            <tr id="row-2">
+              <td class="name">TRIM_START</td>
+              <td class="desc">Drop Year 1 baseline window (test initial-year artifact)</td>
+              <td class="status">✓ Survived (p = 0.004)</td>
+            </tr>
+            <tr id="row-3">
+              <td class="name">TRIM_END</td>
+              <td class="desc">Drop most recent 12 months (test transient recent spikes)</td>
+              <td class="status">✓ Survived (p = 0.002)</td>
+            </tr>
+            <tr id="row-4">
+              <td class="name">STRICT_COVERAGE</td>
+              <td class="desc">Require ≥6 Sentinel-1 radar passes per month</td>
+              <td class="status">✓ Survived (p &lt; 0.001)</td>
+            </tr>
+            <tr id="row-5">
+              <td class="name">COARSER_CELLS</td>
+              <td class="desc">Merge with neighboring cells (spatial scale-invariance)</td>
+              <td class="status">✓ Survived (p = 0.008)</td>
+            </tr>
+            <tr id="row-6">
+              <td class="name">NEIGHBOR_CONTROL</td>
+              <td class="desc">Subtract regional neighbor trend (isolate local anomaly)</td>
+              <td class="status">✓ Survived (p = 0.012)</td>
+            </tr>
+            <tr id="row-7">
+              <td class="name">STRICT_ALPHA</td>
+              <td class="desc">Strict significance threshold (require p &lt; 0.01)</td>
+              <td class="status">✓ Survived (p &lt; 0.010)</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Scene 5: Outro / Title Slam (16.8s – 20.0s) ── -->
+      <section id="scene-5" class="clip" style="opacity: 0;">
+        <h1 id="logo-title" class="logo-title">GHOST FLEET X</h1>
+        <p id="logo-sub" class="logo-subtitle">Discover maritime change. Test the evidence. Decide what to do next.</p>
+        <div id="tags-row" class="tags-row">
+          <span class="tech-pill">FASTAPI</span>
+          <span class="tech-pill">MAPLIBRE GL</span>
+          <span class="tech-pill">SENTINEL-1 SAR</span>
+          <span class="tech-pill">NASA SPACE APPS 2026</span>
+          <span class="tech-pill">100% PUBLIC DATA</span>
+        </div>
+        <div id="outro-link" class="outro-link">github.com/DevAyyan/Ghost-Fleet</div>
+      </section>
+
+      <!-- ── Audio Layer ── -->
+      <audio id="bg-music" data-start="0" data-duration="20" data-track-index="10" data-volume="0.38"
+        src="assets/music/bgm.mp3"></audio>
+      <audio id="sfx-slam" data-start="1.2" data-duration="1.4" data-track-index="11" data-volume="0.75"
+        src="assets/sfx/impact/impactBell_heavy_000.ogg"></audio>
+      <audio id="sfx-lock" data-start="4.8" data-duration="0.2" data-track-index="12" data-volume="0.65"
+        src="assets/sfx/impact/impactSoft_medium_001.ogg"></audio>
+      <audio id="sfx-radar" data-start="9.0" data-duration="0.2" data-track-index="13" data-volume="0.70"
+        src="assets/sfx/interface/switch_001.ogg"></audio>
+      <audio id="sfx-verdict" data-start="15.0" data-duration="0.3" data-track-index="14" data-volume="0.75"
+        src="assets/sfx/impact/impactSoft_heavy_000.ogg"></audio>
+      <audio id="sfx-title" data-start="16.9" data-duration="0.30" data-track-index="15" data-volume="0.85"
+        src="assets/sfx/impact/impactBell_heavy_004.ogg"></audio>
+    </div>
+
+    <script>
+      window.__timelines = {};
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const tl = gsap.timeline({ paused: true });
+
+        // Continuous radar beam rotation
+        tl.to('#radar-beam', { rotation: 1440, duration: 20, ease: 'none' }, 0);
+
+        // Coordinate ticker changes
+        tl.set('#ticker-coords', { textContent: "21°42'N 068°18'E" }, 4.0);
+        tl.set('#ticker-coords', { textContent: "24°50'N 066°30'E" }, 8.5);
+        tl.set('#ticker-coords', { textContent: "19°10'N 064°20'E" }, 13.0);
+        tl.set('#ticker-coords', { textContent: "23°14'N 067°05'E" }, 16.8);
+
+        // ── Scene 1: The Hook (0.0s – 4.0s) ──
+        tl.fromTo('#hook-tag', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 0.4);
+        tl.fromTo('#hook-headline', { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.7, ease: 'power3.out' }, 0.9);
+        tl.fromTo('#hook-alert', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: 'back.out(1.4)' }, 1.6);
+        tl.to('#scene-1', { opacity: 0, scale: 1.05, duration: 0.5, ease: 'power2.in' }, 3.6);
+
+        // ── Scene 2: Coordinated Dark Operations (4.0s – 8.5s) ──
+        tl.to('#scene-2', { opacity: 1, duration: 0.4 }, 4.0);
+        tl.fromTo('#col-dark-info', { opacity: 0, x: -50 }, { opacity: 1, x: 0, duration: 0.6, ease: 'power3.out' }, 4.2);
+        tl.fromTo('#card-dark-cluster', { opacity: 0, scale: 0.92, y: 30 }, { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: 'back.out(1.2)' }, 4.6);
+        tl.to('#scene-2', { opacity: 0, x: -40, duration: 0.5, ease: 'power2.in' }, 8.0);
+
+        // ── Scene 3: Spaceborne Radar & Protected Reserves (8.5s – 13.0s) ──
+        tl.to('#scene-3', { opacity: 1, duration: 0.4 }, 8.5);
+        tl.fromTo('#col-radar-info', { opacity: 0, x: -50 }, { opacity: 1, x: 0, duration: 0.6, ease: 'power3.out' }, 8.7);
+        tl.fromTo('#sensor-1', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }, 9.0);
+        tl.fromTo('#sensor-2', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }, 9.5);
+        tl.fromTo('#sensor-3', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }, 10.0);
+        tl.to('#scene-3', { opacity: 0, scale: 0.96, duration: 0.5, ease: 'power2.in' }, 12.6);
+
+        // ── Scene 4: The 7 Alternative Analyses (13.0s – 16.8s) ──
+        tl.to('#scene-4', { opacity: 1, duration: 0.3 }, 13.0);
+        tl.fromTo('#disproof-box', { opacity: 0, y: 40, scale: 0.95 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out' }, 13.1);
+        tl.fromTo('#row-1', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 13.5);
+        tl.fromTo('#row-2', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 13.7);
+        tl.fromTo('#row-3', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 13.9);
+        tl.fromTo('#row-4', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 14.1);
+        tl.fromTo('#row-5', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 14.3);
+        tl.fromTo('#row-6', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 14.5);
+        tl.fromTo('#row-7', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 14.7);
+        tl.fromTo('#lab-verdict', { scale: 0.8, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(1.5)' }, 15.0);
+        tl.to('#scene-4', { opacity: 0, scale: 1.05, duration: 0.5, ease: 'power2.in' }, 16.3);
+
+        // ── Scene 5: Outro / Title Slam (16.8s – 20.0s) ──
+        tl.to('#scene-5', { opacity: 1, duration: 0.3 }, 16.8);
+        tl.fromTo('#logo-title', { scale: 1.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'power3.out' }, 16.9);
+        tl.fromTo('#logo-sub', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }, 17.3);
+        tl.fromTo('#tags-row', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }, 17.7);
+        tl.fromTo('#outro-link', { opacity: 0 }, { opacity: 1, duration: 0.4 }, 18.1);
+        tl.to('#root', { opacity: 0, duration: 0.6, ease: 'power2.in' }, 19.4);
+
+        window.__timelines["main"] = tl;
+      });
+    </script>
+  </body>
+</html>
