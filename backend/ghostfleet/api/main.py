@@ -117,6 +117,11 @@ def svc(request: Request) -> GhostFleetService:
 
 
 # ---------- endpoints ----------
+@app.get("/api/health")
+def get_health():
+    return {"status": "ok", "service": "Ghost Fleet X"}
+
+
 @app.get("/api/meta", response_model=S.MetaResponse)
 def get_meta(request: Request):
     s = getattr(request.app.state, "svc", None)
