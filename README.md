@@ -50,6 +50,18 @@ The frontend dev server automatically proxies API requests to `http://127.0.0.1:
 
 ---
 
+## Deploy (frontend on Vercel, API on Render)
+The API needs an always-on host: it caches to disk and takes about 10 s to start, which does not suit serverless functions.
+
+1. **API on Render**: New → Blueprint → this repo (`render.yaml`). Set `GLOBAL_FISHING_WATCH` in the dashboard.
+   Check that `https://<service>.onrender.com/api/meta` answers.
+2. **Frontend on Vercel**: import this repo with **Root Directory = `frontend`**. `frontend/vercel.json` forwards `/api/*`
+   to the API, so the browser only talks to the Vercel address and no CORS or `VITE_API_BASE` setting is needed.
+   **Edit the `destination` in `frontend/vercel.json` if your Render address is not `ghost-fleet.onrender.com`.**
+
+On Render's free plan the service sleeps when idle and its disk cache is wiped on restart, so open the site and click
+through each layer before a demo.
+
 ## Verification & Tests
 
 ```bash
