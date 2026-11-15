@@ -12,8 +12,8 @@ Needs only `numpy`, `fastapi`, `uvicorn` and `pytest` for now. The ingestion lay
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `GHOSTFLEET_DATA` | `real` | `real` = live panel from `scripts/ingest_real.py` (503 if missing); `synthetic` = test data |
-| `GHOSTFLEET_PANEL` | `data/processed/panel_real.json` | Path to the real panel |
+| `GHOSTFLEET_DATA` | `real` | `real` = live panel from `backend/scripts/ingest_real.py` (503 if missing); `synthetic` = test data |
+| `GHOSTFLEET_PANEL` | `backend/data/processed/panel_real.json` | Path to the real panel |
 | `GHOSTFLEET_SEED` | `7` | Synthetic panel seed |
 | `GHOSTFLEET_CORS` | `http://localhost:5173,…` | Allowed frontend origins (Vite dev server) |
 

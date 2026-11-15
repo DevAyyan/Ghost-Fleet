@@ -64,7 +64,15 @@ Each of these cost time on 2026-11-14. Check here before debugging something tha
 - On synthetic data the raw-count step flags 0 cells: the fishing-ban/monsoon cycle swamps the Sentinel-1B dip. Show the
   coverage effect as a chart, not as a significance flip.
 
-## Vercel (the API runs as one Python function, `api/index.py`)
+## Vercel (two projects: Root Directory `backend` and Root Directory `frontend`)
+- **The backend must be self-contained.** Vercel only deploys the project's Root Directory, so everything the API reads
+  lives under `backend/` (`backend/data/processed`, `backend/data/seed`). `gfw.ROOT` is the backend folder.
+- **Entry point**: `backend/api/index.py` exposes `app`; `backend/vercel.json` sets `"framework": null` and rewrites every
+  path to it. Without that, Vercel's FastAPI preset searches for an entry point and suggests `export_openapi.py`,
+  which is a script, not the API.
+- **Dependencies** are read from `backend/requirements.txt` or `backend/pyproject.toml`; both list numpy, fastapi and
+  pydantic. `pyproject.toml` names `ghostfleet*` as the only package, because `api/` and `data/` sit beside it and
+  setuptools would otherwise refuse to install ("multiple top-level packages").
 - **Read-only filesystem**: only `/tmp` is writable, and it is per instance. `gfw.py` switches the cache there when the
   `VERCEL` env var is set (`GHOSTFLEET_CACHE` overrides the location anywhere). Never write next to the code.
 - **4.5 MB response cap**: `/api/detections` is over 5 MB as objects (use `?compact=true`) and `/api/cells` is ~4.5 MB
@@ -73,6 +81,8 @@ Each of these cost time on 2026-11-14. Check here before debugging something tha
   and the scan is lazy (`_ensure_loaded`). Don't read `request.app.state.*` directly in a route.
 - **CDN caching**: every successful GET under `/api/` gets `s-maxage=3600` unless the route sets its own header. A route
   whose answer must never be shared between users needs an explicit `Cache-Control: no-store`.
-- `.vercelignore` and the function's `excludeFiles` keep `docs/`, `data/raw/` and tests out of the bundle
-  (limit 250 MB unzipped). `.env` is not deployed: set `GLOBAL_FISHING_WATCH` in the Vercel dashboard.
-
+- **Two addresses**: the frontend finds the API through `VITE_API_BASE` (build time). CORS allows any site by default
+  (`GHOSTFLEET_CORS` restricts it); a single `*` header also keeps responses CDN-cacheable.
+- `.env` is not deployed: set `GLOBAL_FISHING_WATCH` in the Vercel dashboard (value only, without `GLOBAL_FISHING_WATCH=`).
+- **Never `pkill -f`/`pgrep -f` for uvicorn inside a compound command**: the pattern matches the shell running it. Use
+  `ps -eo pid,args | grep "[u]vicorn"`.

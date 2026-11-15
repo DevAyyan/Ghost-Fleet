@@ -1,6 +1,6 @@
 """Build the real Ghost Fleet X panel for every ocean from live APIs (stdlib only).
 
-Sources (all fetched live and cached in data/raw/; the two most recent months are re-fetched):
+Sources (all fetched live and cached in backend/data/raw/; the two most recent months are re-fetched):
   * Global Fishing Watch 4Wings  public-global-sar-presence  -> SAR detections, AIS-matched / unmatched (0.1°),
     one gzipped request per month and match flag for the whole world (~250 KB each), via backend/ghostfleet/gfw.py
   * Element 84 Earth Search STAC  sentinel-1-grd (IW)         -> Sentinel-1 scenes touching each cell each month,
@@ -11,9 +11,9 @@ The analysis grid is the geohash precision-3 grid: 1.40625° cells (360/256 = 18
 Sentinel-1 coverage be counted server-side. AIS reception is approximated per ~11° region (8 x 8 cells) by the
 AIS-matched radar detections per pass there. Chlorophyll is not fetched for the global build.
 
-Output: data/processed/panel_real.json  (read by backend/ghostfleet/real.py)
+Output: backend/data/processed/panel_real.json  (read by ghostfleet/real.py)
 
-    python3 -I scripts/ingest_real.py [--start 2020-01] [--refresh-all] [--skip-wind] [--min-detections 150]
+    python3 -I backend/scripts/ingest_real.py [--start 2020-01] [--refresh-all] [--skip-wind] [--min-detections 150]
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT))          # ROOT is the backend folder
 from ghostfleet.gfw import GFWError, GFWLive  # noqa: E402  (stdlib-only module; shares the map's cache)
 
 RAW = ROOT / "data/raw"

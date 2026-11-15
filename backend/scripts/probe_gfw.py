@@ -22,7 +22,8 @@ DATASET = "public-global-sar-presence:latest"
 
 
 def token() -> str:
-    env = dict(re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", (ROOT / ".env").read_text(), re.M))
+    env_file = next((p for p in (ROOT / ".env", ROOT.parent / ".env") if p.exists()), ROOT / ".env")
+    env = dict(re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", env_file.read_text(), re.M))
     t = env.get("GLOBAL_FISHING_WATCH", "").strip().strip("'\"")
     if not t:
         sys.exit("GLOBAL_FISHING_WATCH missing from .env")

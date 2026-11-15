@@ -33,3 +33,13 @@ A world map of maritime intelligence and dark vessel activity, built from free p
 ## Test & Build Status
 - **Backend**: 61/61 pytest tests passing in `backend/tests/`.
 - **Frontend**: 19/19 Vitest unit tests passing; TypeScript (`tsc --noEmit`) and Vite production build cleanly compiling with 0 errors.
+
+## Repo split into two deployable parts (2026-11-15)
+- `backend/` is now self-contained: the API, its data (`backend/data/processed`, `backend/data/seed`, cache in
+  `backend/data/raw`), the ingest scripts (`backend/scripts/`) and the Vercel entry point (`backend/api/index.py`,
+  `backend/vercel.json`). `frontend/` was already self-contained.
+- Deploy as two Vercel projects from this repo (Root Directory `backend` and `frontend`); the frontend finds the API
+  through `VITE_API_BASE`. Steps are in the README; traps are in `docs/gotchas.md`.
+- The API allows browser requests from any site by default (`GHOSTFLEET_CORS` restricts it).
+- Not yet seen running on Vercel: checked locally from an isolated copy of `backend/` with `VERCEL=1`.
+

@@ -1,0 +1,5 @@
+# Not needed to run the API on Vercel
+tests
+scripts
+data/raw
+.pytest_cache

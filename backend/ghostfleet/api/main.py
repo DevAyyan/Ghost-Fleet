@@ -1,6 +1,6 @@
 """FastAPI app. Run: uvicorn ghostfleet.api.main:app --reload  (from backend/)
 
-Data source: GHOSTFLEET_DATA=real (default; live data built by scripts/ingest_real.py) or synthetic (tests only).
+Data source: GHOSTFLEET_DATA=real (default; live data built by backend/scripts/ingest_real.py) or synthetic (tests only).
 There is deliberately no silent fallback: if the real panel is missing, data endpoints return 503.
 """
 from __future__ import annotations
@@ -93,8 +93,11 @@ app = FastAPI(title="Ghost Fleet X API", version="1.0.0", lifespan=lifespan,
               description="Maritime change intelligence: investigation leads, never accusations.",
               responses={404: {"model": S.ErrorResponse}, 422: {"model": S.ErrorResponse},
                          500: {"model": S.ErrorResponse}, 503: {"model": S.ErrorResponse}})
+# Any site may call the API from a browser by default: it is public, read-only and uses no cookies, and the frontend is
+# usually deployed at a different address. One fixed "*" header also keeps responses cacheable by a CDN. Restrict it with
+# GHOSTFLEET_CORS=https://site-a,https://site-b if needed.
 app.add_middleware(CORSMiddleware,
-                   allow_origins=os.getenv("GHOSTFLEET_CORS", "http://localhost:5173,http://127.0.0.1:5173").split(","),
+                   allow_origins=[o.strip() for o in os.getenv("GHOSTFLEET_CORS", "*").split(",") if o.strip()],
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=2000)   # a global month of detections is several MB of JSON
 
@@ -265,7 +268,7 @@ def get_slicks(request: Request, start: str | None = Query(None, pattern=DAY), e
 
 @app.get("/api/sea/protected-fishing", response_model=S.ProtectedFishingResponse)
 def get_protected_fishing(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
-    """Apparent fishing inside no-take protected areas in a period. Built by scripts/ingest_sea.py; 503 until that has run."""
+    """Apparent fishing inside no-take protected areas in a period. Built by backend/scripts/ingest_sea.py; 503 until that has run."""
     s, e = period(start, end) if (start or end) else (None, None)
     return sea_service.protected_fishing(sea_watch(request).protected_fishing(), s, e)
 
@@ -299,7 +302,7 @@ def get_lane_tile(z: int, x: int, y: int, request: Request, month: str | None = 
 
 @app.post("/api/refresh", response_model=S.MetaResponse)
 def refresh(request: Request):
-    """Reload the panel from disk after `scripts/ingest_real.py` has pulled new data. Safe to retry."""
+    """Reload the panel from disk after `backend/scripts/ingest_real.py` has pulled new data. Safe to retry."""
     with _load_lock:
         _try_load(request.app)
         request.app.state.loaded = True

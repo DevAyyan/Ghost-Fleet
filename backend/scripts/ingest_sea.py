@@ -2,11 +2,11 @@
 
 Global Fishing Watch publishes about 50,000 apparent-fishing events a day and the events API cannot filter by
 protected area, so this pages through whole days (1,000 events per request, ~250 KB gzipped) and keeps the events
-GFW itself tags as inside a no-take marine protected area. Each finished day is cached in data/raw/sea/.
+GFW itself tags as inside a no-take marine protected area. Each finished day is cached in backend/data/raw/sea/.
 
-Output: data/processed/protected_fishing.json  (served by GET /api/sea/protected-fishing)
+Output: backend/data/processed/protected_fishing.json  (served by GET /api/sea/protected-fishing)
 
-    python3 -I scripts/ingest_sea.py [--days 3] [--lag 4]
+    python3 -I backend/scripts/ingest_sea.py [--days 3] [--lag 4]
 
 "Apparent fishing" is inferred by GFW from how a vessel moves. A no-take area can still permit named vessels,
 research or transit, so every record is a lead to check with the managing authority, never a finding.
@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT))          # ROOT is the backend folder
 from ghostfleet.gfw import GFWError  # noqa: E402
 from ghostfleet.sea import GFW, PROTECTED_FISHING, _get, slim_fishing  # noqa: E402
 

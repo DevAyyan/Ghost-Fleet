@@ -1,4 +1,4 @@
-"""Load the real panel built by scripts/ingest_real.py (live GFW / Sentinel-1 coverage / NASA data)."""
+"""Load the real panel built by backend/scripts/ingest_real.py (live GFW / Sentinel-1 coverage / NASA data)."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,7 @@ import numpy as np
 
 from .panel import Panel
 
-DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "panel_real.json"
+DEFAULT_PATH = Path(__file__).resolve().parents[1] / "data" / "processed" / "panel_real.json"
 
 
 class DataUnavailable(RuntimeError):
@@ -42,7 +42,7 @@ def _ais_reception(d: dict, cells: list[dict], T: int) -> np.ndarray:
 def load_real_panel(path: str | os.PathLike | None = None) -> tuple[Panel, RealExtras]:
     p = Path(path or os.getenv("GHOSTFLEET_PANEL", DEFAULT_PATH))
     if not p.exists():
-        raise DataUnavailable(f"Real data panel not found at {p}. Run: python3 -I scripts/ingest_real.py")
+        raise DataUnavailable(f"Real data panel not found at {p}. Run: python3 -I backend/scripts/ingest_real.py")
     try:
         d = json.loads(p.read_text())
     except (OSError, json.JSONDecodeError) as e:

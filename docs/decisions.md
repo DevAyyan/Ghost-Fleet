@@ -67,7 +67,7 @@ Newest last. Each entry: what we decided, why, and what would change it.
       wording test covers the new endpoints.
     - **No live positions.** No free source gives real-time positions of ships that are not broadcasting. The radar layer
       is the latest complete month; events lag about four days. The UI says so.
-    - **Fishing in no-take areas is precomputed** (`scripts/ingest_sea.py`): GFW has ~30,000–50,000 apparent-fishing
+    - **Fishing in no-take areas is precomputed** (`backend/scripts/ingest_sea.py`): GFW has ~30,000–50,000 apparent-fishing
       events a day and no protected-area filter, so whole days are paged and filtered locally (about 3 minutes a day).
     - **Sea names come from a hand-made table of boxes** (`places.py`), a reading aid, not a boundary dataset.
     - **Trend geometry loads only when its layer is switched on** (it is several MB); the layer is off by default.

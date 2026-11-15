@@ -1,8 +1,7 @@
-# Render Blueprint for the Ghost Fleet X API (the frontend is hosted on Vercel: see frontend/vercel.json).
+# Render Blueprint for the Ghost Fleet X API. An always-on alternative to running the API on Vercel.
 # Docs: https://render.com/docs/blueprint-spec
 #
-# The API runs from the repo root because it reads data/processed/ and caches under data/raw/.
-# On the free plan the disk is wiped on every deploy and restart, so the cache refills on first use.
+# On the free plan the disk is wiped on every deploy and restart, so the cache (backend/data/raw) refills on first use.
 
 services:
   - type: web
@@ -10,9 +9,10 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    buildCommand: "pip install -e './backend[api]'"
-    startCommand: "python3 -m uvicorn ghostfleet.api.main:app --app-dir backend --host 0.0.0.0 --port $PORT"
-    healthCheckPath: /api/meta
+    rootDir: backend
+    buildCommand: "pip install -e '.[api]'"
+    startCommand: "python3 -m uvicorn ghostfleet.api.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7

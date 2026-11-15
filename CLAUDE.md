@@ -11,8 +11,8 @@ Read first: `PROGRESS.md` (status and updates) · `docs/decisions.md` (architect
 ```
 backend/ghostfleet/
   panel.py                  Panel dataclass: array structures (cells, months); NaN = unobserved
-  real.py                   Loads data/processed/panel_real.json for trend scan
-  gfw.py                    Global Fishing Watch client: disk-cached under data/raw/gfw/
+  real.py                   Loads backend/data/processed/panel_real.json for trend scan
+  gfw.py                    Global Fishing Watch client: disk-cached under backend/data/raw/gfw/
   sea.py                    Live awareness layers: AIS gaps, oil slicks (Cerulean), presence tiles, vessel pathing
   places.py                 Geographical sea names & piracy risk regions
   api/schemas.py            Contract models (Pydantic, camelCase aliases)
@@ -26,7 +26,7 @@ frontend/src/               React 19 + TypeScript + Vite 8 + MapLibre GL 4.7
   components/SeaDrawer.tsx  Case drawer for events, hotspots, slicks, fishing, and joint dark operations
   components/VesselDrawer.tsx  Single ship timeline, path visualization, and dark gaps
   components/MapView.tsx    MapLibre map: bathymetric ocean basemap, hull polygons, badges, track pathing
-scripts/
+backend/scripts/
   ingest_real.py            Ingests live global SAR and environmental data -> panel_real.json
   ingest_sea.py             Ingests apparent fishing events inside no-take MPAs -> protected_fishing.json
 ```

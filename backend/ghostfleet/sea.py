@@ -3,7 +3,7 @@
   * AIS switched off      Global Fishing Watch events API, gaps GFW classes as likely intentional, any date range
   * Possible oil slicks   SkyTruth Cerulean (machine-detected on Sentinel-1 radar, any date range, largest first)
   * Shipping lanes        Global Fishing Watch 4Wings PNG tiles of AIS vessel presence, any month (proxied: they need the token)
-  * Fishing in no-take    built by scripts/ingest_sea.py from GFW apparent-fishing events (too many to fetch live)
+  * Fishing in no-take    built by backend/scripts/ingest_sea.py from GFW apparent-fishing events (too many to fetch live)
   * One ship              identity plus every recorded event in a date range (fishing, loitering, port calls, encounters,
                           AIS gaps). GFW does not give raw tracks on the free API (403), so a ship's path is drawn
                           through its events.
@@ -319,5 +319,5 @@ class SeaWatch:
     # ---------- apparent fishing inside no-take areas (precomputed) ----------
     def protected_fishing(self) -> dict:
         if not PROTECTED_FISHING.exists():
-            raise LayerNotBuilt("Fishing in no-take areas has not been built yet. Run: python3 -I scripts/ingest_sea.py")
+            raise LayerNotBuilt("Fishing in no-take areas has not been built yet. Run: python3 -I backend/scripts/ingest_sea.py")
         return json.loads(PROTECTED_FISHING.read_text())

@@ -154,7 +154,7 @@ def test_cell_labels_cover_every_hemisphere():
 def test_ingest_grid_matches_geohash_cells():
     import importlib.util
     from pathlib import Path
-    spec = importlib.util.spec_from_file_location("ingest_real", Path(__file__).resolve().parents[2] / "scripts" / "ingest_real.py")
+    spec = importlib.util.spec_from_file_location("ingest_real", Path(__file__).resolve().parents[1] / "scripts" / "ingest_real.py")
     ing = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ing)
     # precision-3 geohashes of Karachi, Cape Town and London fall in the cells that contain those points

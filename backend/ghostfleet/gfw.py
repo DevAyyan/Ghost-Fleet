@@ -2,9 +2,9 @@
 
 Each month is fetched straight from the GFW 4Wings API (AIS-matched and unmatched, 0.1° bins) for the whole
 world: about 250 KB per request with gzip. Responses are cached on disk; past months are kept, the two most
-recent months refresh after `fresh_hours`. The map and scripts/ingest_real.py share this client and cache.
+recent months refresh after `fresh_hours`. The map and backend/scripts/ingest_real.py share this client and cache.
 GFW allows one report at a time per token, so requests are serialised here and a 429 is retried.
-Token: GLOBAL_FISHING_WATCH from the repo's .env (or the environment). It is never logged.
+Token: GLOBAL_FISHING_WATCH from the environment, or from backend/.env or the repo's .env. It is never logged.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import urllib.request
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]      # the backend folder: self-contained (code, data/, scripts/), deployable alone
 ON_VERCEL = bool(os.getenv("VERCEL"))
 # Where fetched data is cached. On Vercel the code directory is read-only, so the cache lives in /tmp: it is private to
 # one running instance and disappears when that instance stops. The CDN cache headers in api/main.py do the lasting work there.
@@ -37,7 +37,7 @@ class GFWError(RuntimeError):
 
 def _token() -> str:
     tok = os.getenv("GLOBAL_FISHING_WATCH", "")
-    env = ROOT / ".env"
+    env = next((p for p in (ROOT / ".env", ROOT.parent / ".env") if p.exists()), ROOT / ".env")
     if not tok and env.exists():
         vals = dict(re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", env.read_text(), re.M))
         tok = vals.get("GLOBAL_FISHING_WATCH", "")

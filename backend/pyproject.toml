@@ -2,13 +2,17 @@
 name = "ghostfleet"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26"]
+dependencies = ["numpy>=1.26", "fastapi>=0.110", "pydantic>=2.6"]
 
 [project.optional-dependencies]
 # Ingestion/API layer (install when network allows): uv pip install -e ".[data,api,dev]"
 data = ["pandas>=2.2", "xarray>=2024.1", "netCDF4>=1.6", "h3>=4.1", "pyarrow>=15"]
-api = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6"]
+api = ["uvicorn>=0.29"]      # to run it as a server: python -m uvicorn ghostfleet.api.main:app
 dev = ["pytest>=8"]
+
+# Only ghostfleet is a package: api/ (Vercel entry point), data/ and scripts/ sit beside it.
+[tool.setuptools.packages.find]
+include = ["ghostfleet*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

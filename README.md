@@ -45,7 +45,7 @@ Live app: <https://ghostfleet.earth>
 | AIS switched off | GFW AIS-gap events classed as likely intentional | Filtered by the period selector; gear buoys excluded |
 | Where ships go dark most | Spatial density of AIS-gap events | Top 12 hotspots in the period |
 | Simultaneous AIS gaps | Spatio-temporal clustering of GFW gap events | Vessels that went dark entering an area, were dark together inside it, and reappeared together (entry and exit within 2.2°, at least 30 min of overlap) |
-| Apparent fishing in protected areas | GFW apparent-fishing events inside WDPA marine protected areas | Filter: all MPAs or strict no-take only. Precomputed by `scripts/ingest_sea.py` |
+| Apparent fishing in protected areas | GFW apparent-fishing events inside WDPA marine protected areas | Filter: all MPAs or strict no-take only. Precomputed by `backend/scripts/ingest_sea.py` |
 | Possible oil slicks | SkyTruth Cerulean (machine-learning detection on Sentinel-1 radar) | The 1,000 largest in the period; not checked by a person |
 | **Lasting changes since 2020** | **Ghost Fleet X trend scan** | See below. 3,315 cells x 82 months |
 | Lights at night | NASA VIIRS Day/Night Band (NOAA-20) via GIBS | Imagery layer |
@@ -125,7 +125,7 @@ recommended action, limitations) or as **GeoJSON** of the affected area.
 
 ### Result on the committed data snapshot
 
-The repository ships `data/processed/panel_real.json` (pulled 14 Nov 2026, 82 months from 2020-01). Running the scan
+The repository ships `backend/data/processed/panel_real.json` (pulled 14 Nov 2026, 82 months from 2020-01). Running the scan
 on it gives 230 events (173 decreasing, 57 increasing) and 50 opposite-trend pairs in about 10 seconds. Most
 surviving changes are declines, and part of that may reflect better AIS adoption and matching, which is not
 corrected for (decision 14).
@@ -154,20 +154,20 @@ backend/                     Python 3.11+ / FastAPI
     places.py                Hand-made sea-name table (a reading aid, not a boundary dataset)
     synthetic.py             Synthetic data for tests only; never served by default
   tests/                     63 pytest tests
+  scripts/
+    ingest_real.py           Build data/processed/panel_real.json (GFW + Earth Search + NASA POWER)
+    ingest_sea.py            Build data/processed/protected_fishing.json (apparent fishing in MPAs)
+    fetch_s1_footprints.py   Sentinel-1 footprint helper
+    fetch_open_data.sh       Older regional (20-26N, 56-70E) fetch of open NASA/NOAA grids
+    probe_gfw.py             Check what the GFW token can query
+  api/index.py               Vercel serverless entry point (backend deploys alone, Root Directory `backend`)
+  data/processed/            Precomputed analysis inputs (committed)
+  data/seed/lanes/           Latest-month shipping-lane tiles for the world view (committed)
 frontend/                    React 19 + TypeScript + Vite + MapLibre GL
   src/
     components/              Map, layer rail, case drawers, vessel drawer, header and limits dialog
     charts/                  Hand-built SVG time-series and waterfall charts
     lib/                     Layers, geometry, formatting; Vitest unit tests
-scripts/
-  ingest_real.py             Build data/processed/panel_real.json (GFW + Earth Search + NASA POWER)
-  ingest_sea.py              Build data/processed/protected_fishing.json (apparent fishing in MPAs)
-  fetch_s1_footprints.py     Sentinel-1 footprint helper
-  fetch_open_data.sh         Older regional (20-26N, 56-70E) fetch of open NASA/NOAA grids
-  probe_gfw.py               Check what the GFW token can query
-api/index.py                 Vercel serverless entry point
-data/processed/              Precomputed analysis inputs (committed)
-data/seed/lanes/             Latest-month shipping-lane tiles for the world view (committed)
 docs/                        API contract, decision log, gotchas, OpenAPI spec
 ```
 
@@ -186,7 +186,8 @@ on request.
 
 ### 1. Add your token
 
-Create `.env` in the repo root (it is git-ignored and the token is never logged):
+Copy `backend/.env.example` to `backend/.env` (it is git-ignored and the token is never logged; a `.env` in the repo
+root also works):
 
 ```
 GLOBAL_FISHING_WATCH=your-token-here
@@ -197,11 +198,11 @@ GLOBAL_FISHING_WATCH=your-token-here
 The repository already contains a snapshot, so you can skip this step to run the app immediately.
 
 ```bash
-# Rebuild the global trend panel (cached under data/raw/; --refresh-all ignores caches)
-python3 -I scripts/ingest_real.py [--start 2020-01] [--min-detections 150] [--skip-wind]
+# Rebuild the global trend panel (cached under backend/data/raw/; --refresh-all ignores caches)
+python3 -I backend/scripts/ingest_real.py [--start 2020-01] [--min-detections 150] [--skip-wind]
 
 # Precompute apparent fishing inside marine protected areas (about 3 min per day scanned)
-python3 -I scripts/ingest_sea.py --days 3
+python3 -I backend/scripts/ingest_sea.py --days 3
 ```
 
 ### 3. Run the API (<http://localhost:8000>)
@@ -235,9 +236,9 @@ because the worldwide scan runs then.
 |---|---|---|
 | `GLOBAL_FISHING_WATCH` | none (required for live layers) | GFW API token; read from the environment or `.env` |
 | `GHOSTFLEET_DATA` | `real` | `real` or `synthetic` (synthetic is for tests only) |
-| `GHOSTFLEET_PANEL` | `data/processed/panel_real.json` | Path to the trend panel |
-| `GHOSTFLEET_CACHE` | `data/raw` (`/tmp/ghostfleet` on Vercel) | Where fetched data is cached |
-| `GHOSTFLEET_CORS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed origins |
+| `GHOSTFLEET_PANEL` | `backend/data/processed/panel_real.json` | Path to the trend panel |
+| `GHOSTFLEET_CACHE` | `backend/data/raw` (`/tmp/ghostfleet` on Vercel) | Where fetched data is cached |
+| `GHOSTFLEET_CORS` | `*` (any site; the API is public and read-only) | Comma-separated allowed origins |
 | `GHOSTFLEET_MAX_MAP_CELLS` | `20000` | Cap on cells returned by `/api/cells` |
 | `GHOSTFLEET_SEED` | `7` | Seed for synthetic data |
 | `VITE_API_BASE` | empty (same origin) | Frontend: API base URL when hosted separately |
@@ -283,22 +284,32 @@ cd frontend && npm test && npx tsc --noEmit && npm run build
 
 ## Deployment
 
-**Vercel (frontend and API together).** Import the repo with the Root Directory empty. `vercel.json` builds the
-frontend as static files and runs the API as one Python function (`api/index.py`) that every `/api/*` request is
-rewritten to. Set `GLOBAL_FISHING_WATCH` for Production and Preview, then check `https://<your-site>/api/health`.
+`frontend/` and `backend/` are self-contained and deploy separately. `docs/`, `CLAUDE.md` and `PROGRESS.md` at the
+top level describe both.
+
+**Vercel (two projects from this one repo).** Create two Vercel projects that import this repo, with different
+**Root Directory** settings:
+
+1. **Backend** (Root Directory `backend`). `backend/vercel.json` runs the API as one Python function
+   (`backend/api/index.py`); leave build settings alone. Set `GLOBAL_FISHING_WATCH` (the token value only), then check
+   `https://<backend>.vercel.app/api/health` and note that address.
+2. **Frontend** (Root Directory `frontend`, framework Vite). Set `VITE_API_BASE` to the backend's address, e.g.
+   `https://<backend>.vercel.app` (no trailing slash). It is compiled in at build time, so redeploy after changing it.
+
+The API accepts browser requests from any site by default. To restrict it, set `GHOSTFLEET_CORS` on the backend to the
+frontend's address. Examples of every variable are in `backend/.env.example` and `frontend/.env.example`.
 
 On Vercel:
 
 - The code directory is read-only, so fetched data is cached in `/tmp` and lasts only as long as one instance. To
   compensate, successful GETs are marked CDN-cacheable for an hour (lane tiles for a month), and the latest month of
-  world-view lane tiles ships in `data/seed/`.
+  world-view lane tiles ships in `backend/data/seed/`.
 - The first trend request after a cold start takes 10 to 20 s.
 - Functions are limited to 60 s and 4.5 MB per response. A full year of AIS-off events fetched for the first time
   can exceed 60 s; shorter periods are fine.
-- Zooming the shipping lanes into a new area takes up to about 10 s per tile the first time.
 
-**Render (alternative).** `render.yaml` runs the API only, with none of those limits. Point the frontend at it with
-`VITE_API_BASE`.
+**Render (alternative).** `render.yaml` deploys the same backend to Render, with none of those limits. Point the
+frontend at it with `VITE_API_BASE`.
 
 ---
 
