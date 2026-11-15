@@ -140,7 +140,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 
 .sym { justify-self: center; display: block; }
 .sym-lanes { width: 18px; height: 10px; background: linear-gradient(170deg, transparent 40%, var(--sounding) 40%, var(--sounding) 60%, transparent 60%); }
-.sym-hotspots { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--magenta); background: var(--magenta-tint); }
+.sym-hotspots { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle, rgb(120 10 80 / 0.85) 20%, rgb(163 22 111 / 0.3) 55%, rgb(163 22 111 / 0) 72%); }
 .sym-changes { width: 16px; height: 11px; border: 1.5px dashed var(--magenta); background: var(--magenta-tint); }
 .sym-nightLights { width: 14px; height: 14px; background: #0b1826 radial-gradient(circle at 65% 40%, #ffe9a8 0 1.5px, transparent 1.6px); outline: 1px solid var(--rule-strong); }
 .sym-chlorophyll { width: 14px; height: 14px; background: linear-gradient(90deg, #2f3e9e, #2bb3a3, #cbd83a); }

@@ -201,8 +201,8 @@ function wakeOf(e: AisOffEvent | undefined): GeoJSON.Feature[] {
 const POINT_LAYERS = [["fishing-pt", "fishing"], ["encounter-pt", "encounter"], ["closure-pt", "closure"], ["aisoff-pt", "aisOff"],
   ["turnon-pt", "turnOn"], ["loiter-pt", "loitering"], ["slick-pt", "slick"]] as const;
 /** Record layers and their resting opacity. They fade while one ship's path is open, so the path reads first. */
-const FADE: [layer: string, prop: "icon-opacity" | "circle-opacity" | "circle-stroke-opacity", rest: number][] = [
-  ["hotspot-disc", "circle-opacity", 0.1], ["hotspot-disc", "circle-stroke-opacity", 0.85], ["slick-pt", "icon-opacity", 0.9], ["aisoff-pt", "icon-opacity", 1], ["aisoff-ring", "circle-stroke-opacity", 1],
+const FADE: [layer: string, prop: "icon-opacity" | "circle-opacity" | "circle-stroke-opacity" | "heatmap-opacity", rest: number][] = [
+  ["heat", "heatmap-opacity", 0.85], ["slick-pt", "icon-opacity", 0.9], ["aisoff-pt", "icon-opacity", 1], ["aisoff-ring", "circle-stroke-opacity", 1],
   ["closure-pt", "circle-opacity", 0.75], ["loiter-pt", "icon-opacity", 1], ["encounter-pt", "icon-opacity", 1], ["encounter-ring", "circle-stroke-opacity", 1],
   ["fishing-pt", "icon-opacity", 1], ["fishing-ring", "circle-stroke-opacity", 1], ["turnon-pt", "icon-opacity", 1], ["turnon-halo", "circle-opacity", 1],
 ];
@@ -277,7 +277,10 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
   );
   const turnOnZonesGeo = useMemo(() => turnOnZones(aisOff?.turnOnClusters ?? []), [aisOff?.turnOnClusters]);
 
-  const hotspotGeo = useMemo(() => points(aisOff?.hotspots ?? [], (h) => ({ id: h.id, count: h.count })), [aisOff]);
+  const heatGeo = useMemo<GeoJSON.FeatureCollection>(() => ({
+    type: "FeatureCollection",
+    features: (aisOff?.heat ?? []).map(([lat, lon]) => ({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties: {} })),
+  }), [aisOff]);
   // Each ship that went dark is an empty hull, its bow turned toward where it reappeared.
   const aisOffGeo = useMemo(() => points(aisOff?.events ?? [], (e) => ({
     id: e.id, noTake: e.inNoTake, mark: markIcon(vesselClass(e.vesselType)), tipShip: JSON.stringify(ghostShip(e.vesselType, 0)),
@@ -394,18 +397,20 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
               { "source-layer": "main", minzoom: 3,
                 paint: { "icon-color": ["match", ["get", "label"], "oil", OIL, "wind", WIND, UNCLASSED], "icon-halo-color": PAPER, "icon-halo-width": 2 } });
 
-      for (const id of ["hotspots", "slick", "aisoff", "aisoff-wake", "fishing", "illegal-zones", "turnons", "turnon-zones", "hulls", "picked", "track-line", "track-pt",
+      for (const id of ["heat", "slick", "aisoff", "aisoff-wake", "fishing", "illegal-zones", "turnons", "turnon-zones", "hulls", "picked", "track-line", "track-pt",
                         "encounter", "loiter", "closure", "slick-link"]) {
         m.addSource(id, { type: "geojson", data: empty });
       }
 
-      // where AIS is switched off most often: a flat disc with a clean edge for each of the busiest places, larger the more
-      // ships went dark there. (It used to be a heat wash, which read as a smudge behind every ship.)
-      const byCount = (k: number): maplibregl.ExpressionSpecification => ["interpolate", ["linear"], ["get", "count"], 5, 10 * k, 60, 26 * k];
-      m.addLayer({
-        id: "hotspot-disc", type: "circle", source: "hotspots",
-        paint: { "circle-color": MAGENTA, "circle-opacity": 0.1, "circle-stroke-color": MAGENTA, "circle-stroke-width": 1.5, "circle-stroke-opacity": 0.85,
-                 "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, byCount(1), 6, byCount(3.4)] },
+      m.addLayer({   // where AIS is switched off most often
+        id: "heat", type: "heatmap", source: "heat", maxzoom: 9,
+        paint: {
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 1, 7, 4, 18, 8, 40],
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 1, 0.35, 6, 1.2],
+          "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(163,22,111,0)", 0.15, "rgba(163,22,111,0.18)",
+            0.5, "rgba(163,22,111,0.45)", 1, "rgba(120,10,80,0.8)"],
+          "heatmap-opacity": 0.85,
+        },
       });
       // possible oil slicks: a brown patch sized by area, with an ink edge when Cerulean matched a ship on AIS as the best candidate source
       symbols("slick-pt", "slick", {
@@ -658,7 +663,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     const m = map.current;
     if (!ready || !m) return;
     const set = (id: string, data: GeoJSON.FeatureCollection) => (m.getSource(id) as GeoJSONSource).setData(data);
-    set("hotspots", hotspotGeo); set("aisoff", aisOffGeo); set("slick", slickGeo); set("fishing", fishingGeo);
+    set("heat", heatGeo); set("aisoff", aisOffGeo); set("slick", slickGeo); set("fishing", fishingGeo);
     set("illegal-zones", illegalZonesGeo); set("turnons", turnOnsGeo); set("turnon-zones", turnOnZonesGeo);
     set("encounter", encounterGeo); set("loiter", loiterGeo); set("closure", closureGeo); set("slick-link", linkGeo.geo);
     set("hulls", hullGeo); set("track-line", trackGeo.lines);
@@ -667,7 +672,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     set("track-pt", { type: "FeatureCollection", features: trackGeo.pts.features.map((f) => ({ ...f, properties: { ...f.properties, mark } })) });
     set("track-ends", { type: "FeatureCollection", features: trackGeo.start
       ? [{ type: "Feature", geometry: { type: "Point", coordinates: trackGeo.start.at }, properties: { end: "start" } }] : [] });
-  }, [ready, hotspotGeo, aisOffGeo, slickGeo, fishingGeo, illegalZonesGeo, turnOnsGeo, turnOnZonesGeo, hullGeo, trackGeo, track,
+  }, [ready, heatGeo, aisOffGeo, slickGeo, fishingGeo, illegalZonesGeo, turnOnsGeo, turnOnZonesGeo, hullGeo, trackGeo, track,
       encounterGeo, loiterGeo, closureGeo, linkGeo]);
 
   // the unseen stretch of the AIS-off record open in the drawer
@@ -808,7 +813,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     if (!ready || !m) return;
     const show = (layer: string, on: boolean) => m.setLayoutProperty(layer, "visibility", on ? "visible" : "none");
     show("night", visible.nightLights); show("chl", visible.chlorophyll); show("lanes", visible.lanes);
-    show("hotspot-disc", visible.hotspots); show("slick-pt", visible.slicks);
+    show("heat", visible.hotspots); show("slick-pt", visible.slicks);
     show("aisoff-pt", visible.aisOff); show("aisoff-ring", visible.aisOff); show("aisoff-wake", visible.aisOff); show("aisoff-wake-pt", visible.aisOff);
     show("fishing-pt", visible.fishing); show("fishing-ring", visible.fishing);
     show("illegal-zone-fill", visible.fishing && highlightIllegalZones);
