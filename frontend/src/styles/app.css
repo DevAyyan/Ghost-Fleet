@@ -278,13 +278,29 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 .section h3 { font: 600 var(--fs-lg)/1.25 var(--serif); }
 .section .hint { font-size: var(--fs-xs); color: var(--sounding); max-width: 60ch; }
 
-.statement { display: grid; grid-template-columns: 5.5rem 1fr; gap: var(--s-3); align-items: baseline; }
+.statement { display: grid; grid-template-columns: 7rem 1fr; gap: var(--s-3); align-items: baseline; }
 .statement p { font: 400 var(--fs-md)/1.55 var(--serif); max-width: 60ch; }
-.tag { font: italic 400 var(--fs-sm)/1.3 var(--serif); color: var(--sounding); text-align: right; padding-right: var(--s-2); border-right: 2px solid var(--rule-strong); }
-.tag[data-label="OBSERVATION"] { border-right-color: var(--ink); color: var(--ink); }
-.tag[data-label="INFERENCE"] { border-right-color: var(--shelf); }
-.tag[data-label="HYPOTHESIS"] { border-right-color: var(--warn); border-right-style: dotted; }
-.tag[data-label="RECOMMENDATION"] { border-right-color: var(--magenta); color: var(--magenta); }
+/* the four epistemic labels: one mark, word and colour each, the same in every case file */
+.tag { --c: var(--sounding); justify-self: start; display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px;
+  font: 600 var(--fs-xs)/1.5 var(--sans); white-space: nowrap; color: var(--c); border: 1px solid var(--c);
+  background: color-mix(in srgb, var(--c) 10%, transparent); cursor: help; }
+.tag-mark { font-weight: 700; }
+.tag[data-label="OBSERVATION"] { --c: var(--ink); }
+.tag[data-label="INFERENCE"] { --c: var(--shelf); }
+.tag[data-label="HYPOTHESIS"] { --c: var(--warn); border-style: dashed; }
+.tag[data-label="RECOMMENDATION"] { --c: var(--magenta); }
+.read-guide { margin: var(--s-3) var(--s-5) 0; font-size: var(--fs-sm); border: 1px solid var(--rule); border-radius: var(--r-2); background: var(--card); }
+.read-guide summary { cursor: pointer; padding: var(--s-2) var(--s-3); font-weight: 600; }
+.read-guide ul { list-style: none; margin: 0; padding: 0 var(--s-3) var(--s-2); display: grid; gap: var(--s-2); }
+.read-guide li { display: grid; grid-template-columns: 7rem 1fr; gap: var(--s-2); align-items: baseline; }
+.read-guide p { padding: 0 var(--s-3) var(--s-2); font-size: var(--fs-xs); }
+/* a jargon term: dotted underline, its meaning on hover or focus */
+.term { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.term:focus-visible { outline: 2px solid var(--magenta); outline-offset: 1px; border-radius: 2px; }
+.term-tip { position: fixed; z-index: 100000; width: max-content; max-width: 280px; padding: var(--s-2) var(--s-3); pointer-events: none;
+  font: 400 var(--fs-xs)/1.45 var(--sans); color: var(--paper); background: var(--ink); border-radius: var(--r-2); box-shadow: 0 2px 8px rgb(0 0 0 / 0.25); }
+.term-tip[data-above="true"] { transform: translateY(-100%); }
+.term-tip b { display: block; }
 
 .bars { display: grid; gap: var(--s-2); }
 .bar-row { display: grid; grid-template-columns: 10rem 1fr 2.75rem; gap: var(--s-3); align-items: center; font-size: var(--fs-sm); }
@@ -360,7 +376,7 @@ dialog.modal::backdrop { background: rgb(19 38 59 / 0.45); }
   .slider-title { display: none; }
   .facts > div { grid-template-columns: 7.5rem 1fr; }
   .statement { grid-template-columns: 1fr; gap: 2px; }
-  .tag { text-align: left; border-right: 0; padding: 0; }
+
   .bar-row { grid-template-columns: 7rem 1fr 2.5rem; }
   .map-legend { max-width: 12rem; left: var(--s-2); top: var(--s-2); padding: var(--s-2) var(--s-3); }
   .map-legend .muted { display: none; }

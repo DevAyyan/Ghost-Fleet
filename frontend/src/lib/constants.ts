@@ -16,3 +16,14 @@ export const LABEL_WORD = {
   HYPOTHESIS: "Hypothesis",
   RECOMMENDATION: "Next step",
 } as const;
+
+/** A mark for each label, so the four read apart without relying on colour. */
+export const LABEL_MARK = { OBSERVATION: "◉", INFERENCE: "∴", HYPOTHESIS: "?", RECOMMENDATION: "→" } as const;
+
+/** What each label promises, in plain words: shown in every case file's reading guide and on the label itself. */
+export const LABEL_MEANING = {
+  OBSERVATION: "In the data itself: what a satellite or a ship's AIS recorded.",
+  INFERENCE: "Worked out from what was observed, by a stated rule.",
+  HYPOTHESIS: "One possible explanation. Not a finding.",
+  RECOMMENDATION: "What an investigator could check next.",
+} as const;

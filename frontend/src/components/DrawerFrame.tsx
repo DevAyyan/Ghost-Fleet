@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { IconName } from "../lib/icons";
 import { Glyph } from "./Glyph";
+import { ReadingGuide } from "./ui";
 
 /** Detail panel shell: focuses its heading on open, closes on Escape, labelled for screen readers. */
 export function DrawerFrame({ title, onClose, children, extra, icon }: {
@@ -25,6 +26,7 @@ export function DrawerFrame({ title, onClose, children, extra, icon }: {
         <button type="button" className="btn btn-ghost btn-sm drawer-close" onClick={onClose} aria-label="Close case file">✕</button>
         {extra && <div className="drawer-extra">{extra}</div>}
       </div>
+      <ReadingGuide />
       {children}
     </aside>
   );

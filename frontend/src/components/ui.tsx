@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { ApiError } from "../api/client";
 import type { Direction, Statement } from "../api/types";
-import { LABEL_NAMES, LABEL_WORD } from "../lib/constants";
+import { LABEL_MARK, LABEL_MEANING, LABEL_NAMES, LABEL_WORD } from "../lib/constants";
+import { WithTerms } from "./Term";
 import { directionGlyph, directionWord, formatPct } from "../lib/format";
 
 export function TrendChip({ direction, pct }: { direction: Direction; pct: number | null }) {
@@ -17,12 +18,32 @@ export function TrendChip({ direction, pct }: { direction: Direction; pct: numbe
 export function StatementRow({ statement }: { statement: Statement }) {
   return (
     <div className="statement">
-      <span className="tag" data-label={statement.label} title={LABEL_NAMES[statement.label]}>
-        <span aria-hidden="true">{LABEL_WORD[statement.label]}</span>
-        <span className="sr-only">{LABEL_NAMES[statement.label]}:</span>
-      </span>
-      <p>{statement.text}</p>
+      <EpistemicTag label={statement.label} />
+      <p><WithTerms text={statement.text} /></p>
     </div>
+  );
+}
+
+/** The epistemic label of a statement: the same mark, word and colour in every case file. */
+export function EpistemicTag({ label }: { label: Statement["label"] }) {
+  return (
+    <span className="tag" data-label={label} title={`${LABEL_NAMES[label]}: ${LABEL_MEANING[label]}`}>
+      <span className="tag-mark" aria-hidden="true">{LABEL_MARK[label]}</span>
+      <span aria-hidden="true">{LABEL_WORD[label]}</span>
+      <span className="sr-only">{LABEL_NAMES[label]}:</span>
+    </span>
+  );
+}
+
+/** How to read a case file: what each of the four labels promises. */
+export function ReadingGuide() {
+  const labels = Object.keys(LABEL_MEANING) as Statement["label"][];
+  return (
+    <details className="read-guide">
+      <summary>How to read this case</summary>
+      <ul>{labels.map((l) => <li key={l}><EpistemicTag label={l} /><span>{LABEL_MEANING[l]}</span></li>)}</ul>
+      <p className="muted">Every case is a lead to check, never an accusation.</p>
+    </details>
   );
 }
 
@@ -62,7 +83,7 @@ export function Section({ title, children, hint }: { title: string; children: Re
     <section className="section" aria-label={title}>
       <h3>{title}</h3>
       {children}
-      {hint && <p className="hint">{hint}</p>}
+      {hint && <p className="hint">{typeof hint === "string" ? <WithTerms text={hint} /> : hint}</p>}
     </section>
   );
 }

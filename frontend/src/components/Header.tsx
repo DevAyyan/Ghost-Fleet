@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { MetaResponse } from "../api/types";
 import { formatFetched } from "../lib/format";
 import { Glyph } from "./Glyph";
+import { WithTerms } from "./Term";
 import { DemoBadge } from "./ui";
 
 const LIMITS = [
@@ -50,7 +51,7 @@ export function Header({ meta }: { meta?: MetaResponse }) {
           </p>
           <p className="muted">{meta?.disclaimer}</p>
           <h3>Limitations</h3>
-          <ul>{LIMITS.map((l) => <li key={l}>{l}</li>)}</ul>
+          <ul>{LIMITS.map((l) => <li key={l}><WithTerms text={l} /></li>)}</ul>
           {meta && <p className="muted">Data: {meta.sourceNote || meta.sensors.join(", ")}</p>}
           <form method="dialog"><button className="btn btn-primary" autoFocus>Close</button></form>
         </div>

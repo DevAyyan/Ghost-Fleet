@@ -10,6 +10,7 @@ import type { ShipOptions } from "../lib/ship3d";
 import { Glyph, Ship } from "./Glyph";
 import { LayerSwatch, ZoneSwatch } from "./MapKey";
 import { Ship3d } from "./Ship3d";
+import { WithTerms } from "./Term";
 import { ErrorState, Skeleton, TrendChip } from "./ui";
 
 interface Props {
@@ -151,7 +152,7 @@ function Key({ items, note }: { items: [IconName | ShipOptions, string][]; note?
       {items.map(([art, text]) => (
         <li key={text}>{typeof art === "string" ? <Glyph name={art} size={26} /> : <Ship3d size={art.consort ? 62 : 52} heading={60} {...art} />}{text}</li>
       ))}
-      {note && <li className="key-note">{note}</li>}
+      {note && <li className="key-note"><WithTerms text={note} /></li>}
     </ul>
   );
 }
@@ -383,7 +384,7 @@ export function LayerRail(p: Props) {
                     </div>
                     {isOpen && (
                       <div className="layer-detail" id={`layer-detail-${l.id}`}>
-                        <p className="layer-about">{l.about}</p>
+                        <p className="layer-about"><WithTerms text={l.about} /></p>
                         <p className="layer-source">Source: {l.source}</p>
                         {detail[l.id]()}
                       </div>
