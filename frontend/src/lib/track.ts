@@ -10,6 +10,7 @@ export const TRACK_RAMP = {
 
 export interface TrackGeo {
   lines: GeoJSON.FeatureCollection;      // one feature per stretch: { dark, t } with t = 0 (start) .. 1 (latest)
+  path: GeoJSON.FeatureCollection;       // the whole path as one line, start to latest, for a continuous colour gradient
   pts: GeoJSON.FeatureCollection;        // one feature per recorded event: { kind, t, bearing }
   coords: [number, number][];
   start: { at: [number, number]; time: string } | null;
@@ -55,6 +56,8 @@ export function trackFeatures(track: VesselResponse | undefined): TrackGeo {
   return {
     coords,
     lines: { type: "FeatureCollection", features: lines },
+    path: { type: "FeatureCollection", features: coords.length > 1
+      ? [{ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} }] : [] },
     pts: { type: "FeatureCollection", features: pts.map((p, i) => ({
       type: "Feature", geometry: { type: "Point", coordinates: coords[i] }, properties: { kind: p.kind, t: frac(i), bearing: heading(i) },
     })) },

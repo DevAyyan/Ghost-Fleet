@@ -502,11 +502,19 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       const ramp = (c: readonly string[]): maplibregl.ExpressionSpecification =>
         ["interpolate", ["linear"], ["get", "t"], 0, c[0], 0.5, c[1], 1, c[2]];
       const round = { "line-cap": "round", "line-join": "round" } as const;
-      m.addLayer({ id: "track-casing", type: "line", source: "track-line", filter: ["!", ["get", "dark"]], layout: round,
-                   paint: { "line-color": PAPER, "line-opacity": 0.95,
-                            "line-width": ["interpolate", ["exponential", 1.4], ["zoom"], 1, 2.6, 4, 4.6, 8, 8, 12, 12.5] } });
-      m.addLayer({ id: "track-seen", type: "line", source: "track-line", filter: ["!", ["get", "dark"]], layout: round,
-                   paint: { "line-color": ramp(TRACK_RAMP.seen), "line-width": width(1) } });
+      const casingWidth: maplibregl.ExpressionSpecification = ["interpolate", ["exponential", 1.4], ["zoom"], 1, 2.6, 4, 4.6, 8, 8, 12, 12.5];
+      // The whole path is one line whose colour runs continuously along its length, so the direction of travel reads
+      // even when the ship has only a few recorded events (a per-stretch colour looked flat then).
+      m.addSource("track-path", { type: "geojson", data: empty, lineMetrics: true });
+      m.addLayer({ id: "track-casing", type: "line", source: "track-path", layout: round,
+                   paint: { "line-color": PAPER, "line-opacity": 0.95, "line-width": casingWidth } });
+      m.addLayer({ id: "track-seen", type: "line", source: "track-path", layout: round,
+                   paint: { "line-gradient": ["interpolate", ["linear"], ["line-progress"],
+                                              0, TRACK_RAMP.seen[0], 0.5, TRACK_RAMP.seen[1], 1, TRACK_RAMP.seen[2]],
+                            "line-width": width(1) } });
+      // stretches sailed unseen: the solid gradient is wiped there and redrawn dashed, pink to deep magenta
+      m.addLayer({ id: "track-unseen-gap", type: "line", source: "track-line", filter: ["get", "dark"],
+                   paint: { "line-color": PAPER, "line-width": casingWidth } });
       m.addLayer({ id: "track-dark", type: "line", source: "track-line", filter: ["get", "dark"],
                    paint: { "line-color": ramp(TRACK_RAMP.dark), "line-width": width(1.05), "line-dasharray": [1.5, 1.5] } });
       const dot = (k: number): maplibregl.ExpressionSpecification =>
@@ -666,7 +674,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     set("heat", heatGeo); set("aisoff", aisOffGeo); set("slick", slickGeo); set("fishing", fishingGeo);
     set("illegal-zones", illegalZonesGeo); set("turnons", turnOnsGeo); set("turnon-zones", turnOnZonesGeo);
     set("encounter", encounterGeo); set("loiter", loiterGeo); set("closure", closureGeo); set("slick-link", linkGeo.geo);
-    set("hulls", hullGeo); set("track-line", trackGeo.lines);
+    set("hulls", hullGeo); set("track-line", trackGeo.lines); set("track-path", trackGeo.path);
     // where the open ship went dark is marked with its own kind of hull
     const mark = markIcon(vesselClass(null, track?.identity.gear));
     set("track-pt", { type: "FeatureCollection", features: trackGeo.pts.features.map((f) => ({ ...f, properties: { ...f.properties, mark } })) });
