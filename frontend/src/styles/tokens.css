@@ -1,10 +1,14 @@
 /* Ghost Fleet X: nautical-chart vernacular.
    Magenta means "look here", exactly as on a paper chart (lights, cautions, routes).
-   All text colours meet WCAG AA on --paper. */
-:root {
+   Two themes share one set of names. The chart and the case files are paper (the default, and .theme-light).
+   The instrument panels around them (header, layer rail, drawer title) are navy (.theme-navy): the same roles,
+   recoloured, so a component looks right in either without knowing which it is in.
+   All text colours meet WCAG AA on their own --paper. */
+:root, .theme-light {
   --paper: #f3f6f5;          /* chart paper: cool, never cream */
   --paper-2: #e9eff0;        /* margin / secondary surface */
   --shoal: #dce9f0;          /* quiet fills, selection */
+  --card: #fbfcfc;           /* raised surface: fields, the open layer, the case file */
   --rule: #c5d1d8;           /* hairlines */
   --rule-strong: #97a8b4;
 
@@ -35,6 +39,35 @@
   --r-1: 2px; --r-2: 3px;
 
   --header-h: 3.5rem;
-  --rail-w: 20rem;
-  --drawer-w: 29rem;
+  --rail-w: clamp(17.5rem, 24vw, 21rem);      /* the panels give way on a small screen, so the chart keeps its room */
+  --drawer-w: clamp(22rem, 33vw, 29rem);
 }
+
+.theme-navy {
+  --paper: #10243a;          /* the panel itself: deep navy, the chart's ink a shade bluer */
+  --paper-2: #18324e;        /* hover */
+  --shoal: #224669;          /* selection */
+  --card: #152c45;           /* fields, the open layer */
+  --rule: #25405c;
+  --rule-strong: #4a6683;
+
+  --ink: #eaf0f4;            /* text (13.6:1 on the panel) */
+  --sounding: #a9bbcb;       /* secondary text (7.6:1) */
+
+  --magenta: #f593cf;        /* the same "look here", lightened to read on navy (7.1:1) */
+  --magenta-tint: #48284f;
+  --shelf: #8fc3ef;
+  --shelf-tint: #1d3f60;
+
+  --trend-up: var(--magenta);
+  --trend-down: var(--shelf);
+  --trend-none: var(--sounding);
+  --focus: #ffffff;
+  --warn: #f0c36b;
+  --ok: #7fd3ad;
+  --danger: #ff9d8f;
+
+  color: var(--ink);
+  color-scheme: dark;        /* native date pickers, radios and scrollbars follow */
+}
+.theme-light { color: var(--ink); color-scheme: light; }

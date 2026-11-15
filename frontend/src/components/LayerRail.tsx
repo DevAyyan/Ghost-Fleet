@@ -3,7 +3,11 @@ import { api, type ApiError } from "../api/client";
 import type { AisOffResponse, ClosuresResponse, EncountersResponse, LoiteringResponse, MetaResponse, ProtectedFishingResponse, SlicksResponse } from "../api/types";
 import { useResource, type Resource } from "../hooks/useResource";
 import { formatDateTime, formatDay, formatMonth, formatP, formatSpan, humanCellId, vesselWord } from "../lib/format";
-import { EARLIEST, LAYERS, daysAgo, lastDays, periodProblem, spanDays, type LayerId, type Period, type Selection } from "../lib/layers";
+import type { IconName } from "../lib/icons";
+import { EARLIEST, LAYERS, LAYER_GROUPS, daysAgo, lastDays, periodProblem, spanDays, type LayerId, type Period, type Selection } from "../lib/layers";
+import type { ShipOptions } from "../lib/ship3d";
+import { Glyph, Ship } from "./Glyph";
+import { Ship3d } from "./Ship3d";
 import { ErrorState, Skeleton, TrendChip } from "./ui";
 
 interface Props {
@@ -91,7 +95,7 @@ function ShipSearch({ selection, onSelect }: Pick<Props, "selection" | "onSelect
             <li key={v.vesselId}>
               <button type="button" className="feed-btn" aria-current={selection?.kind === "vessel" && selection.id === v.vesselId}
                 onClick={() => onSelect({ kind: "vessel", id: v.vesselId })}>
-                <span className="feed-title">{v.name ?? "Unnamed vessel"}</span>
+                <span className="feed-title"><Ship name={v.name} gear={v.gear} /></span>
                 <span className="feed-meta">Flag {v.flag ?? "unknown"}{v.mmsi ? `, MMSI ${v.mmsi}` : ""}{v.gear.length ? `. ${v.gear.join(", ").replace(/_/g, " ").toLowerCase()}` : ""}.</span>
               </button>
             </li>
@@ -99,6 +103,23 @@ function ShipSearch({ selection, onSelect }: Pick<Props, "selection" | "onSelect
         </ol>
       ) : <p className="muted layer-empty">No ship matches “{query}”.</p>)}
     </div>
+  );
+}
+
+/** Layers drawn with a chart symbol show that same symbol in the legend; the rest keep a swatch of their colour or line. */
+const LAYER_GLYPH: Partial<Record<LayerId, IconName>> = {
+  aisOff: "ghost-fishing", turnOns: "fleet", encounters: "meet-carrier", loitering: "wait-carrier", fishing: "fish", slicks: "slick", infra: "platform",
+};
+
+/** What a layer's drawings mean: a ship as the map draws it close up, or a chart symbol. */
+function Key({ items, note }: { items: [IconName | ShipOptions, string][]; note?: string }) {
+  return (
+    <ul className="key">
+      {items.map(([art, text]) => (
+        <li key={text}>{typeof art === "string" ? <Glyph name={art} size={26} /> : <Ship3d size={art.consort ? 62 : 52} heading={60} {...art} />}{text}</li>
+      ))}
+      {note && <li className="key-note">{note}</li>}
+    </ul>
   );
 }
 
@@ -176,8 +197,11 @@ export function LayerRail(p: Props) {
     aisOff: () => aisOff.data ? (
       <>
         {aisOff.data.truncated && <p className="muted layer-empty">This period has more events than can be fetched; the newest 15,000 are used.</p>}
+        <Key items={[[{ kind: "fishing", look: "ghost" }, "Fishing vessel"], [{ kind: "cargo", look: "ghost" }, "Cargo ship"],
+                     [{ kind: "carrier", look: "ghost" }, "Refrigerated carrier"], [{ kind: "tanker", look: "ghost" }, "Bunker tanker"]]}
+          note="A ship that stopped broadcasting is drawn empty. From far out it is a small white hull; zoom in and it becomes the ship. The bow points to where it reappeared, a ring marks one that went dark inside a no-take area, and pointing at a ship shows the stretch it sailed unseen." />
         <Rows items={aisOff.data.events} kind="aisOff" selection={selection} onSelect={onSelect} label="Vessels that switched AIS off, newest first"
-        title={(e) => e.vesselName ?? "Unnamed vessel"}
+        title={(e) => <Ship name={e.vesselName} type={e.vesselType} />}
         meta={(e) => `${vesselWord(e.vesselType)}, flag ${e.flag ?? "unknown"}. ${e.place}, ${formatDay(e.start)}, dark for ${formatSpan(e.durationHours)}.`} />
       </>
     ) : <Pending r={aisOff} what="AIS-off events" />,
@@ -187,35 +211,40 @@ export function LayerRail(p: Props) {
         meta={(h) => `${Math.round(h.topVesselTypeShare * 100)}% ${vesselWord(h.topVesselType).toLowerCase()}s${h.topFlags.length ? `, mostly flagged ${h.topFlags.join(", ")}` : ""}. Typical gap ${formatSpan(h.medianDurationHours)}.`} />
     ) : <Pending r={aisOff} what="AIS-off hot spots" />,
     turnOns: () => aisOff.data ? (
+      <>
+      <Key items={[["fleet", "Ships that were dark at the same time, drawn larger the more there were"]]}
+        note="The dashed outline joins where they switched AIS off and where they switched it back on." />
       <Rows items={aisOff.data.turnOnClusters ?? []} kind="turnOn" selection={selection} onSelect={onSelect}
         label="Areas where vessels entered dark, operated together, and exited"
         title={(t) => <>{t.place} <span className="num feed-figure">{t.count} vessels</span></>}
         meta={(t) => `${formatSpan(t.sharedHours)} concurrently dark (${formatDateTime(t.coPresenceStart)} to ${formatDateTime(t.coPresenceEnd)}). ${t.topFlags.length ? `Flagged ${t.topFlags.join(", ")}. ` : ""}${t.vesselTypes.map(vesselWord).join(", ")}.`} />
+      </>
     ) : <Pending r={aisOff} what="joint dark operations" />,
     fishing: () => fishing.data ? (
       <>
-        <div className="filter-box" style={{ padding: "var(--s-2) var(--s-5)", borderBottom: "1px solid var(--rule)" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", fontWeight: 600, fontSize: "var(--fs-sm)", cursor: "pointer" }}>
+        <div className="zone-filter">
+          <label>
             <input type="checkbox" checked={highlightIllegalZones} onChange={(e) => onToggleIllegalZones(e.target.checked)} />
-            Highlight illegal fishing zones on map
+            Outline the protected areas fished in
           </label>
           {highlightIllegalZones && (
-            <div style={{ marginTop: "var(--s-1)", display: "flex", gap: "var(--s-3)", fontSize: "var(--fs-xs)" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer" }}>
+            <div className="zone-filter-which" role="group" aria-label="Which protected areas">
+              <label>
                 <input type="radio" name="illegalFilter" checked={!noTakeOnly} onChange={() => onToggleNoTakeOnly(false)} />
-                All MPAs ({fishing.data.events.length})
+                All protected areas ({fishing.data.events.length})
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer" }}>
+              <label>
                 <input type="radio" name="illegalFilter" checked={noTakeOnly} onChange={() => onToggleNoTakeOnly(true)} />
-                Strict No-Take only ({fishing.data.events.filter((e) => e.fullNoTake).length})
+                Strict no-take only ({fishing.data.events.filter((e) => e.fullNoTake).length})
               </label>
             </div>
           )}
         </div>
-        <p className="muted layer-empty" style={{ marginTop: "var(--s-2)" }}>This layer is built a day at a time. Days checked so far: {formatDay(fishing.data.days[0])} to {formatDay(fishing.data.days[fishing.data.days.length - 1])} ({fishing.data.scanned.toLocaleString()} apparent-fishing events).</p>
+        <Key items={[[{ kind: "fishing", hull: "#a3271b" }, "A vessel that moved as if fishing"]]} note="A ring marks a strict no-take area, where no fishing is allowed at all." />
+        <p className="muted layer-empty">This layer is built a day at a time. Days checked so far: {formatDay(fishing.data.days[0])} to {formatDay(fishing.data.days[fishing.data.days.length - 1])} ({fishing.data.scanned.toLocaleString()} apparent-fishing events).</p>
         <Rows items={filteredFishing} kind="fishing" selection={selection} onSelect={onSelect} label="Apparent fishing inside marine protected areas"
-          title={(f) => f.vesselName ?? "Unnamed vessel"}
-          meta={(f) => `Flag ${f.flag ?? "unknown"}. ${f.place}, ${formatDay(f.start)}${f.durationHours ? `, about ${formatSpan(f.durationHours)}` : ""}. ${f.fullNoTake ? "Strict No-Take area." : "Partly no-take area."}`} />
+          title={(f) => <Ship name={f.vesselName} type={f.vesselType ?? "fishing"} />}
+          meta={(f) => `Flag ${f.flag ?? "unknown"}. ${f.place}, ${formatDay(f.start)}${f.durationHours ? `, about ${formatSpan(f.durationHours)}` : ""}. ${f.fullNoTake ? "Strict no-take area." : "Partly no-take area."}`} />
       </>
     ) : <Pending r={fishing} what="fishing in no-take areas" />,
     slicks: () => slicks.data ? (
@@ -223,6 +252,7 @@ export function LayerRail(p: Props) {
         {slicks.data.totalMatched != null && slicks.data.totalMatched > slicks.data.slicks.length && (
           <p className="muted layer-empty">Showing the {slicks.data.slicks.length.toLocaleString()} largest of {slicks.data.totalMatched.toLocaleString()} detected in the period.</p>
         )}
+        <Key items={[["slick", "Possible slick, drawn larger the more sea it covers"], ["slick-ship", "A ship on AIS is its best-matching source"]]} />
         <Rows items={slicks.data.slicks} kind="slick" selection={selection} onSelect={onSelect} label="Possible oil slicks, largest first"
           title={(s) => <>{s.place} <span className="num feed-figure">{Math.round(s.areaKm2).toLocaleString()} km²</span></>}
           meta={(s) => {
@@ -240,15 +270,21 @@ export function LayerRail(p: Props) {
         {encounters.data.truncated && <p className="muted layer-empty">This period has more meetings than can be fetched; the newest are used.</p>}
         <p className="muted layer-empty">{encounters.data.events.filter((e) => e.darkLink).length.toLocaleString()} with AIS switched off nearby,{" "}
           {encounters.data.events.filter((e) => e.vessels.some((v) => v.authorisation === "NOT_FOUND")).length.toLocaleString()} involving a vessel with no public licence on record.</p>
+        <Key items={[[{ kind: "carrier", consort: "fishing" }, "A refrigerated carrier with a fishing vessel alongside"],
+                     [{ kind: "tanker", consort: "fishing" }, "A bunker tanker with a fishing vessel alongside"]]}
+          note="A magenta ring: AIS was switched off nearby. From far out, a larger mark is a stronger lead." />
         <Rows items={encounters.data.events} kind="encounter" selection={selection} onSelect={onSelect} label="Meetings at sea, strongest leads first"
           title={(e) => <>{e.vessels.map((v) => v.name ?? "Unnamed").join(" + ")}{e.darkLink && <span className="feed-figure"> AIS off</span>}</>}
           meta={(e) => `${e.type?.replace("-", " and ") ?? "Meeting"}, ${e.place}, ${formatDay(e.start)}, ${formatSpan(e.durationHours)}.${e.vessels.some((v) => v.authorisation === "NOT_FOUND") ? " No public licence on record for one vessel." : ""}`} />
       </>
     ) : <Pending r={encounters} what="meetings at sea" />,
     loitering: () => loitering.data ? (
+      <>
+      <Key items={[[{ kind: "carrier" }, "Waiting, no meeting recorded"], [{ kind: "carrier", plate: "#0f766e" }, "Met a vessel within a day"]]} />
       <Rows items={loitering.data.events} kind="loitering" selection={selection} onSelect={onSelect} label="Carriers and bunker tankers waiting offshore"
-        title={(l) => <>{l.vesselName ?? "Unnamed vessel"}{l.metVessel && <span className="feed-figure"> met a vessel</span>}</>}
+        title={(l) => <><Ship name={l.vesselName} type={l.vesselType} />{l.metVessel && <span className="feed-figure"> met a vessel</span>}</>}
         meta={(l) => `${vesselWord(l.vesselType)}, flag ${l.flag ?? "unknown"}. ${l.place}, ${Math.round(l.shoreKm ?? 0).toLocaleString()} km out, ${formatSpan(l.durationHours)} from ${formatDay(l.start)}.`} />
+      </>
     ) : <Pending r={loitering} what="carriers waiting offshore" />,
     closures: () => closures.data ? (
       <ol className="feed" aria-label="Seasonal fishing bans, each year">
@@ -263,7 +299,12 @@ export function LayerRail(p: Props) {
         )))}
       </ol>
     ) : <Pending r={closures} what="seasonal bans" />,
-    infra: () => <p className="muted layer-empty">Dark brown: oil and gas. Green: wind. Grey: not classified. Click one for details. Shown from zoom 3.</p>,
+    infra: () => (
+      <>
+        <Key items={[["platform", "Oil or gas platform"], ["turbine", "Wind turbine"], ["structure", "Structure, type not classified"]]} />
+        <p className="muted layer-empty">Select one on the map for details. They appear once you zoom in a little.</p>
+      </>
+    ),
     effort: () => <p className="muted layer-empty">Fishing hours from {formatDay(period.start)} to {formatDay(period.end)}. Tiles can take a few seconds the first time.</p>,
     changes: () => <ChangeList meta={meta} selection={selection} onSelect={onSelect} />,
     nightLights: () => <p className="muted layer-empty">Image date: {formatDay(nightDay)}. This layer covers the chart with a night view; the other layers stay on top.</p>,
@@ -271,38 +312,43 @@ export function LayerRail(p: Props) {
   };
 
   return (
-    <aside className="rail" aria-label="Map layers and what they show">
+    <aside className="rail theme-navy" aria-label="Map layers and what they show">
       <div className="rail-head">
         <h2>At sea</h2>
         <PeriodBar period={period} onPeriod={onPeriod} />
       </div>
       <div className="rail-body">
         <ShipSearch selection={selection} onSelect={onSelect} />
-        <ul className="layer-list">
-          {LAYERS.map((l) => {
-            const isOpen = open === l.id;
-            return (
-              <li key={l.id} className="layer" data-open={isOpen}>
-                <div className="layer-row">
-                  <input type="checkbox" id={`layer-${l.id}`} checked={visible[l.id]} onChange={() => onToggle(l.id)}
-                    aria-label={`Show ${l.name} on the map`} />
-                  <i className={`sym sym-${l.id}`} aria-hidden="true" />
-                  <button type="button" className="layer-name" aria-expanded={isOpen} aria-controls={`layer-detail-${l.id}`}
-                    onClick={() => onOpen(isOpen ? null : l.id)}>
-                    <span>{l.name}</span>{counts[l.id]}
-                  </button>
-                </div>
-                {isOpen && (
-                  <div className="layer-detail" id={`layer-detail-${l.id}`}>
-                    <p className="layer-about">{l.about}</p>
-                    <p className="layer-source">Source: {l.source}</p>
-                    {detail[l.id]()}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        {LAYER_GROUPS.map((g) => (
+          <section key={g.id} className="layer-group" aria-labelledby={`layer-group-${g.id}`}>
+            <h3 id={`layer-group-${g.id}`} className="layer-group-name">{g.name}</h3>
+            <ul className="layer-list">
+              {LAYERS.filter((l) => l.group === g.id).map((l) => {
+                const isOpen = open === l.id;
+                return (
+                  <li key={l.id} className="layer" data-open={isOpen} data-on={visible[l.id]}>
+                    <div className="layer-row">
+                      <input type="checkbox" id={`layer-${l.id}`} checked={visible[l.id]} onChange={() => onToggle(l.id)}
+                        aria-label={`Show ${l.name} on the map`} />
+                      {LAYER_GLYPH[l.id] ? <Glyph name={LAYER_GLYPH[l.id]!} size={22} className="sym" /> : <i className={`sym sym-${l.id}`} aria-hidden="true" />}
+                      <button type="button" className="layer-name" aria-expanded={isOpen} aria-controls={`layer-detail-${l.id}`}
+                        onClick={() => onOpen(isOpen ? null : l.id)}>
+                        <span>{l.name}</span>{counts[l.id]}<i className="chev" aria-hidden="true" />
+                      </button>
+                    </div>
+                    {isOpen && (
+                      <div className="layer-detail" id={`layer-detail-${l.id}`}>
+                        <p className="layer-about">{l.about}</p>
+                        <p className="layer-source">Source: {l.source}</p>
+                        {detail[l.id]()}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
       </div>
     </aside>
   );

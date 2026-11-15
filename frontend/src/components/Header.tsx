@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { MetaResponse } from "../api/types";
 import { formatFetched } from "../lib/format";
+import { Glyph } from "./Glyph";
 import { DemoBadge } from "./ui";
 
 const LIMITS = [
@@ -14,9 +15,9 @@ const LIMITS = [
 export function Header({ meta }: { meta?: MetaResponse }) {
   const dialog = useRef<HTMLDialogElement>(null);
   return (
-    <header className="header">
+    <header className="header theme-navy">
       <div className="brand">
-        <h1>Ghost Fleet X</h1>
+        <h1><Glyph name="ghost-cargo" size={30} className="brand-mark" />Ghost Fleet X</h1>
         <span className="tagline">where what satellites see and what ships report stop agreeing</span>
       </div>
       {meta?.isDemoData && <DemoBadge />}
@@ -30,7 +31,7 @@ export function Header({ meta }: { meta?: MetaResponse }) {
       <button type="button" className="btn btn-ghost" onClick={() => dialog.current?.showModal()}>
         <span className="label-long">Method &amp; limits</span><span className="label-short" aria-hidden="true">Method</span>
       </button>
-      <dialog ref={dialog} className="modal" aria-labelledby="limits-title">
+      <dialog ref={dialog} className="modal theme-light" aria-labelledby="limits-title">
         <div className="modal-body">
           <h2 id="limits-title">Method and limitations</h2>
           <p>

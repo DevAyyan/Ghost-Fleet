@@ -3,9 +3,13 @@ import type { AisOffEvent, OilSlick, VesselPoint } from "../api/types";
 import { useResource } from "../hooks/useResource";
 import { formatDay, formatSpan } from "../lib/format";
 import type { Period } from "../lib/layers";
+import { ghostIcon, hullIcon, vesselClass } from "../lib/vessel";
 import { DrawerFrame } from "./DrawerFrame";
+import { Glyph } from "./Glyph";
 import { InsightsPanel } from "./InsightsPanel";
+import { ShipProfile } from "./ShipProfile";
 import { ErrorState, Section, Skeleton, StatementRow } from "./ui";
+import { VesselTimeline } from "./VesselTimeline";
 
 interface Props {
   vesselId: string;
@@ -64,6 +68,7 @@ export function VesselDrawer({ vesselId, period, onClose, onFocus, fromSlick }: 
     );
   }
   const v = res.data, id = v.identity;
+  const kind = vesselClass(null, id.gear);
   const log = v.points.filter((p) => p.kind !== "gap_on");
   const first = v.points[0], latest = v.points[v.points.length - 1];
   const facts: [string, string][] = [
@@ -86,8 +91,10 @@ export function VesselDrawer({ vesselId, period, onClose, onFocus, fromSlick }: 
           </div>
         </Section>
       )}
-      <Section title="In this period">
+      <ShipProfile kind={kind} lengthM={id.lengthM} gear={id.gear} />
+      <Section title="In this period" hint={v.gaps.length ? "On the timeline, select a dark stretch to move the map there." : undefined}>
         {v.statements.map((s) => <StatementRow key={s.text} statement={s} />)}
+        <VesselTimeline start={v.start} end={v.end} points={v.points} gaps={v.gaps} onFocus={onFocus} />
         {first && latest && (
           <dl className="facts">
             <div><dt>Path starts</dt><dd>
@@ -103,10 +110,10 @@ export function VesselDrawer({ vesselId, period, onClose, onFocus, fromSlick }: 
           <span className="tl-wide"><i className="tl-ramp tl-ramp-seen" />Path between recorded events: pale where the period starts, darkest where the ship was last seen</span>
           <span className="tl-wide"><i className="tl-ramp tl-ramp-dark" />Sailed unseen, shaded the same way</span>
           <span><i className="tl-dot tl-start" />Start of the path</span>
-          <span><i className="tl-dot tl-latest" />Last seen</span>
-          <span><i className="tl-dot tl-off" />Went dark</span>
+          <span><Glyph name={hullIcon(kind)} size={20} />Last seen, heading the way it last sailed</span>
+          <span><Glyph name={ghostIcon(kind)} size={20} />Went dark</span>
           <span><i className="tl-dot tl-on" />Reappeared</span>
-          <span><i className="tl-dot tl-port" />Port call</span>
+          <span><Glyph name="anchor" size={16} />Port call</span>
           <span><i className="tl-dot tl-fish" />Apparent fishing</span>
         </div>
       </Section>

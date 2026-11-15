@@ -70,7 +70,7 @@ describe("format", () => {
     expect(props[0].t).toBeCloseTo(0.125);                                   // by time, not by position in the list
     expect(g.coords.map((c) => c[0])).toEqual([178, 179.5, 180.5, 182]);     // crosses the antimeridian without wrapping
     expect(g.start).toEqual({ at: [178, -17], time: "2026-08-01T00:00:00Z" });
-    expect(g.latest).toEqual({ at: [182, -17], time: "2026-08-09T00:00:00Z" });
+    expect(g.latest).toEqual({ at: [182, -17], time: "2026-08-09T00:00:00Z", bearing: 90 });   // last leg runs due east
     expect(trackFeatures(undefined).start).toBeNull();
   });
   it("humanises cell ids in every hemisphere", () => {

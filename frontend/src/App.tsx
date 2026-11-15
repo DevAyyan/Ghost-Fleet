@@ -51,6 +51,7 @@ export default function App() {
   const [spot, setSpot] = useState<{ lon: number; lat: number; key: string } | null>(null);   // a place picked inside the ship panel
   const [highlightIllegalZones, setHighlightIllegalZones] = useState(true);
   const [noTakeOnly, setNoTakeOnly] = useState(false);
+  const [railOpen, setRailOpen] = useState(true);
   // the slick a ship was opened from, as one of its candidate sources: the map links the two
   const [slickLink, setSlickLink] = useState<{ slick: OilSlick; rank: number } | null>(null);
 
@@ -115,7 +116,7 @@ export default function App() {
   return (
     <div className="app">
       <Header meta={meta.data} />
-      <main className={`main ${drawerOpen ? "has-drawer" : ""}`}>
+      <main className={`main${drawerOpen ? " has-drawer" : ""}${railOpen ? "" : " rail-closed"}`}>
         <LayerRail meta={meta.data} visible={visible} onToggle={toggle} open={open} onOpen={openLayer}
           selection={selection} onSelect={select} aisOff={aisOff} slicks={slicks} fishing={fishing}
           encounters={encounters} loitering={loitering} closures={closures}
@@ -125,6 +126,9 @@ export default function App() {
           noTakeOnly={noTakeOnly} onToggleNoTakeOnly={setNoTakeOnly} />
 
         <section className="map-wrap" aria-label="Map">
+          <button type="button" className="btn btn-sm rail-toggle" aria-expanded={railOpen} onClick={() => setRailOpen((o) => !o)}>
+            {railOpen ? "Hide layers" : "Show layers"}
+          </button>
           <ErrorBoundary title="The map could not be drawn">
           <MapView visible={visible} aisOff={aisOff.data}
             slicks={slicks.data?.slicks ?? []} fishing={fishing.data?.events ?? []}

@@ -4,10 +4,15 @@ import type {
   ProtectedFishingEvent, Statement,
 } from "../api/types";
 import { formatDateTime, formatDay, formatSpan, vesselWord } from "../lib/format";
+import type { IconName } from "../lib/icons";
 import type { Period } from "../lib/layers";
+import type { ShipOptions } from "../lib/ship3d";
+import { CLASS_WORD, shapeOf, vesselClass } from "../lib/vessel";
 import { DrawerFrame } from "./DrawerFrame";
+import { Ship } from "./Glyph";
 import { InsightsPanel } from "./InsightsPanel";
 import { SlickCandidates } from "./SlickCandidates";
+import { ShipFigure } from "./ShipProfile";
 import { Section, StatementRow } from "./ui";
 
 /** One year of one seasonal ban, with where it is drawn (its busiest fishing spot). */
@@ -120,6 +125,37 @@ function facts(item: SeaRecord): [string, ReactNode][] {
   }
 }
 
+/** The symbol a record has on the map, for those drawn as a symbol and not as a ship. */
+function icon(item: SeaRecord): IconName | undefined {
+  if (item.kind === "turnOn") return "fleet";
+  if (item.kind === "slick") return item.record.candidates[0]?.type === "VESSEL" ? "slick-ship" : "slick";
+  return undefined;
+}
+
+/** The ship, or pair of ships, a record is about, as the map draws it close up, with a line saying what the drawing is. */
+function figure(item: SeaRecord): { ship: ShipOptions; label: string; caption: string } | null {
+  const NOT = "Not a drawing of this ship.";
+  switch (item.kind) {
+    case "aisOff": {
+      const c = vesselClass(item.record.vesselType), word = CLASS_WORD[c].toLowerCase();
+      return { ship: { kind: shapeOf(c), look: "ghost" }, label: `A ${word}, drawn as an empty hull.`,
+               caption: `Typical outline of a ${word}, drawn empty because it stopped broadcasting. ${NOT}` };
+    }
+    case "fishing":
+      return { ship: { kind: "fishing", hull: "#a3271b" }, label: "A fishing vessel.", caption: `Typical outline of a fishing vessel. ${NOT}` };
+    case "encounter": {
+      const tanker = item.record.type?.startsWith("bunker"), big = tanker ? "bunker tanker" : "refrigerated carrier";
+      return { ship: { kind: tanker ? "tanker" : "carrier", consort: "fishing" }, label: `A ${big} with a fishing vessel alongside.`,
+               caption: `Typical outlines of a ${big} and a fishing vessel alongside. Not drawings of these ships.` };
+    }
+    case "loitering": {
+      const tanker = vesselClass(item.record.vesselType) === "bunker", word = tanker ? "bunker tanker" : "refrigerated carrier";
+      return { ship: { kind: tanker ? "tanker" : "carrier" }, label: `A ${word}.`, caption: `Typical outline of a ${word}. ${NOT}` };
+    }
+    default: return null;
+  }
+}
+
 function title(item: SeaRecord): string {
   switch (item.kind) {
     case "aisOff": return `${item.record.vesselName ?? "Unnamed vessel"} went dark`;
@@ -142,8 +178,10 @@ export function SeaDrawer({ item, onClose, onOpenVessel, period, onOpenSlickSour
   const seen = statements.filter((s) => s.label === "OBSERVATION" || s.label === "INFERENCE");
   const might = statements.filter((s) => s.label === "HYPOTHESIS");
   const next = statements.filter((s) => s.label === "RECOMMENDATION");
+  const fig = figure(item);
   return (
-    <DrawerFrame title={title(item)} onClose={onClose}>
+    <DrawerFrame title={title(item)} onClose={onClose} icon={icon(item)}>
+      {fig && <ShipFigure ship={fig.ship} label={fig.label}>{fig.caption}</ShipFigure>}
       <Section title="What was seen">
         {seen.map((s) => <StatementRow key={s.text} statement={s} />)}
         <dl className="facts">
@@ -173,10 +211,10 @@ export function SeaDrawer({ item, onClose, onOpenVessel, period, onOpenSlickSour
             {item.record.vessels.map((v, i) => (
               <li key={v.vesselId ?? i}>
                 <button type="button" className="feed-btn" disabled={!v.vesselId} onClick={() => v.vesselId && onOpenVessel(v.vesselId)}>
-                  <span className="feed-title">{v.name ?? "Unnamed vessel"}</span>
+                  <span className="feed-title"><Ship name={v.name} type={v.vesselType} /></span>
                   <span className="feed-meta">
-                    {PARTY[v.vesselType ?? ""] ?? "Vessel"}, flag {v.flag ?? "unknown"}. {AUTH_WORD[v.authorisation]}.
-                    {v.wentDark ? " Switched AIS off within 48 hours." : ""}{v.vesselId ? " Open track →" : ""}
+                    {PARTY[v.vesselType ?? ""] ?? "Vessel"}, flag {v.flag ?? "unknown"}. {AUTH_WORD[v.authorisation].replace(/^./, (c) => c.toUpperCase())}.
+                    {v.wentDark ? " Switched AIS off within 48 hours." : ""}{v.vesselId ? " Select to see its path." : ""}
                   </span>
                 </button>
               </li>
@@ -197,27 +235,18 @@ export function SeaDrawer({ item, onClose, onOpenVessel, period, onOpenSlickSour
       )}
       {item.kind === "turnOn" && (
         <Section title={`Vessels in this joint operation (${item.record.count})`}
-          hint="Each vessel turned off AIS while entering, operated dark inside with the others, and turned AIS on while exiting. Click to inspect full track.">
+          hint="Each vessel turned off AIS while entering, operated dark inside with the others, and turned AIS on while exiting. Select a vessel to see its path.">
           <ul className="feed">
             {item.record.vessels.map((v, i) => (
               <li key={i}>
-                <button type="button" className="feed-btn"
-                  style={{ cursor: v.vesselId ? "pointer" : "default" }}
-                  onClick={() => v.vesselId && onOpenVessel(v.vesselId)}>
-                  <div className="feed-title">
-                    <span>{v.vesselName ?? "Unnamed vessel"}</span>
+                <button type="button" className="feed-btn" disabled={!v.vesselId} onClick={() => v.vesselId && onOpenVessel(v.vesselId)}>
+                  <span className="feed-title">
+                    <Ship name={v.vesselName} type={v.vesselType} />
                     <span className="feed-figure muted">Dark for {formatSpan(v.durationHours)}</span>
-                  </div>
-                  <div className="feed-meta">
-                    {vesselWord(v.vesselType)}, flag {v.flag ?? "unknown"}.
-                  </div>
-                  <div className="feed-meta" style={{ fontSize: "var(--fs-xs)", marginTop: "2px" }}>
-                    • Entered: {coords(v.enterLat, v.enterLon)}{v.start ? ` at ${formatDateTime(v.start)}` : ""} (AIS off)
-                  </div>
-                  <div className="feed-meta" style={{ fontSize: "var(--fs-xs)" }}>
-                    • Exited: {coords(v.exitLat, v.exitLon)}{v.end ? ` at ${formatDateTime(v.end)}` : ""} (AIS on)
-                    {v.vesselId ? " • Open track →" : ""}
-                  </div>
+                  </span>
+                  <span className="feed-meta">{vesselWord(v.vesselType)}, flag {v.flag ?? "unknown"}.</span>
+                  <span className="feed-meta">AIS off at <span className="num">{coords(v.enterLat, v.enterLon)}</span>{v.start ? `, ${formatDateTime(v.start)}` : ""}.</span>
+                  <span className="feed-meta">AIS on again at <span className="num">{coords(v.exitLat, v.exitLon)}</span>{v.end ? `, ${formatDateTime(v.end)}` : ""}.</span>
                 </button>
               </li>
             ))}

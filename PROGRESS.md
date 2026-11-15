@@ -30,9 +30,24 @@ A world map of maritime intelligence and dark vessel activity, built from free p
   - Synchronized MapLibre circle halos and interactive text badges (`⚡ X ships (Yh dark together)`).
   - Temporally indexed graph clustering reducing calculation time to $< 0.4\text{ s}$ across 13,000+ events.
 
+## Chart symbols and ship drawer visuals (2026-11-15)
+- **One symbol set** (`frontend/src/lib/icons.ts`, drawn by `components/Glyph.tsx`): the map, the rail legend, the lists, the hover card and the drawers all use the same vector drawings. Shape says what a record is; a ring or a larger size marks a stronger lead.
+- **Ships are 3D models** (`frontend/src/lib/ship3d.ts`): each kind of vessel (fishing vessel, cargo ship, refrigerated carrier, bunker tanker, plain ship) is a handful of prisms, turned to its heading, lit, and written out as SVG. They are vector drawings placed over the map (`syncShips` in `MapView.tsx`), so they are sharp on any screen. From zoom 4.4 inward the ships in view are drawn this way, up to 170 at once, nearest the middle first. A ship that switched AIS off is an empty white hull with broken magenta edges, bow turned to where it reappeared; a meeting is a carrier or tanker with a fishing vessel alongside; fishing in a protected area is a red fishing vessel.
+- **From far out, ships are small marks**: a short hull for fishing vessels, a long one for the rest, two alongside for a meeting. These are distance-field images (`lib/sdf.ts`), the one kind of map symbol that stays sharp at any size and rotation. No extra library is involved.
+- **The same ships elsewhere**: the hover card, the legend keys in the rail, and a figure at the top of each ship's drawer (all drawn to one scale, with the recorded length marked). Each figure says it is the typical outline of the type, not a drawing of that ship.
+- **Nothing on the chart is a stretched picture**: the symbols that are not ships (slick, fleet, platform, turbine, anchor, the sights on the open record) are distance fields too, the "where ships go dark most" heat wash is now a flat disc with a clean edge per hotspot, and shipping lanes are gone by zoom 5.4, before their coarse tiles smear.
+- **Navy panels** (`styles/tokens.css`): the header, the layer rail and the drawer title use `.theme-navy`, which recolours the same token names (`--paper`, `--ink`, `--magenta`, ...), so components need no dark-mode rules of their own. The chart, the case-file body and the method dialog stay paper (`.theme-light`).
+- **Room for the chart**: panel widths shrink on small screens, and "Hide layers" on the map puts the rail away.
+- **Rail**: layers are grouped under headings (`LAYER_GROUPS` in `lib/layers.ts`), rows show an arrow that turns when open, and layers that are switched off are greyed. Each layer explains its symbol's variants.
+- **Drawers**: a record's symbol sits beside its title. The ship drawer has a figure of the vessel type with its recorded length (`ShipProfile.tsx`) and a timeline of the period showing dark stretches against fishing, port calls and meetings (`VesselTimeline.tsx`, `lib/timeline.ts`). On the map the open ship is drawn heading the way it last sailed, port calls are anchors, and every other record fades back.
+- Map labels are in plain words (no emoji); the "illegal fishing zones" toggle now reads "Outline the protected areas fished in", in line with leads-not-accusations.
+
+## Working on the frontend without the backend
+- `frontend/.env.local` with `GHOSTFLEET_API=https://ghostfleet.earth` makes `npm run dev` forward `/api` to the live site, so no local backend or Global Fishing Watch token is needed. Leave `VITE_API_BASE` unset locally: the live API refuses browser requests from another address.
+
 ## Test & Build Status
 - **Backend**: 61/61 pytest tests passing in `backend/tests/`.
-- **Frontend**: 19/19 Vitest unit tests passing; TypeScript (`tsc --noEmit`) and Vite production build cleanly compiling with 0 errors.
+- **Frontend**: 35/35 Vitest unit tests passing; TypeScript (`tsc --noEmit`) and Vite production build cleanly compiling with 0 errors.
 
 ## Repo split into two deployable parts (2026-11-15)
 - `backend/` is now self-contained: the API, its data (`backend/data/processed`, `backend/data/seed`, cache in

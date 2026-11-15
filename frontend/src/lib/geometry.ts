@@ -60,3 +60,21 @@ export function pointInRing(pt: Pt, ring: Pt[]): boolean {
   }
   return inside;
 }
+
+/** The same longitude, moved by whole turns to lie within half a turn of `near`: keeps a line across the antimeridian short. */
+export function unwrapLon(lon: number, near: number): number {
+  let x = lon;
+  while (x - near > 180) x -= 360;
+  while (x - near < -180) x += 360;
+  return x;
+}
+
+/** Compass bearing in degrees (0 = north, 90 = east) of the straight line a Mercator map draws from one point to another.
+ *  Null when the two points coincide. */
+export function bearing(from: Pt, to: Pt): number | null {
+  const rad = Math.PI / 180;
+  const y = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (Math.max(-85, Math.min(85, lat)) * rad) / 2));
+  const dx = (unwrapLon(to[0], from[0]) - from[0]) * rad, dy = y(to[1]) - y(from[1]);
+  if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return null;
+  return ((Math.atan2(dx, dy) / rad) + 360) % 360;
+}

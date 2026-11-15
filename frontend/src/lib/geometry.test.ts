@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chaikin, clusterShape, convexHull, pointInRing, type Pt } from "./geometry";
+import { bearing, chaikin, clusterShape, convexHull, pointInRing, unwrapLon, type Pt } from "./geometry";
 
 const square = (x: number, y: number, h = 0.25): Pt[] => [[x - h, y - h], [x + h, y - h], [x + h, y + h], [x - h, y + h], [x - h, y - h]];
 
@@ -21,5 +21,14 @@ describe("geometry", () => {
     expect(pointInRing([66.75, 24.25], shape)).toBe(true);
     expect(shape).not.toContainEqual([66, 24]);           // corners are rounded off
     expect(pointInRing([68, 24.25], shape)).toBe(false);
+  });
+  it("bearing follows the compass and takes the short way across the antimeridian", () => {
+    expect(bearing([10, 0], [10, 5])).toBeCloseTo(0);
+    expect(bearing([10, 0], [15, 0])).toBeCloseTo(90);
+    expect(bearing([10, 5], [10, 0])).toBeCloseTo(180);
+    expect(bearing([10, 0], [5, 0])).toBeCloseTo(270);
+    expect(bearing([179, 0], [-179, 0])).toBeCloseTo(90);   // 2 degrees east, not 358 west
+    expect(bearing([10, 0], [10, 0])).toBeNull();
+    expect(unwrapLon(-179, 179)).toBe(181);
   });
 });

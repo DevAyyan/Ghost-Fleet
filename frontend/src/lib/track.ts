@@ -1,5 +1,6 @@
 // A ship's path as map features, coloured by time so the eye can tell where it started and where it was last seen.
 import type { VesselResponse } from "../api/types";
+import { bearing } from "./geometry";
 
 /** Pale at the start of the period, darkest at the latest recorded position. Seen stretches are blue to ink, unseen ones pink to deep magenta. */
 export const TRACK_RAMP = {
@@ -9,10 +10,10 @@ export const TRACK_RAMP = {
 
 export interface TrackGeo {
   lines: GeoJSON.FeatureCollection;      // one feature per stretch: { dark, t } with t = 0 (start) .. 1 (latest)
-  pts: GeoJSON.FeatureCollection;        // one feature per recorded event: { kind, t }
+  pts: GeoJSON.FeatureCollection;        // one feature per recorded event: { kind, t, bearing }
   coords: [number, number][];
   start: { at: [number, number]; time: string } | null;
-  latest: { at: [number, number]; time: string } | null;
+  latest: { at: [number, number]; time: string; bearing: number } | null;   // bearing: the heading of its last recorded leg
 }
 
 export function trackFeatures(track: VesselResponse | undefined): TrackGeo {
@@ -41,13 +42,23 @@ export function trackFeatures(track: VesselResponse | undefined): TrackGeo {
                  properties: { dark, t: (frac(i) + frac(i + 1)) / 2 } });
   }
   const last = pts.length - 1;
+  // which way the ship was heading at each point: toward the next one, or along the leg it arrived by
+  const heading = (i: number): number => {
+    for (let j = i + 1; j <= last; j++) { const b = bearing(coords[i], coords[j]); if (b != null) return b; }
+    for (let j = i - 1; j >= 0; j--) { const b = bearing(coords[j], coords[i]); if (b != null) return b; }
+    return 0;
+  };
+  const arrived = (): number => {
+    for (let j = last - 1; j >= 0; j--) { const b = bearing(coords[j], coords[last]); if (b != null) return b; }
+    return 0;
+  };
   return {
     coords,
     lines: { type: "FeatureCollection", features: lines },
     pts: { type: "FeatureCollection", features: pts.map((p, i) => ({
-      type: "Feature", geometry: { type: "Point", coordinates: coords[i] }, properties: { kind: p.kind, t: frac(i) },
+      type: "Feature", geometry: { type: "Point", coordinates: coords[i] }, properties: { kind: p.kind, t: frac(i), bearing: heading(i) },
     })) },
     start: pts.length ? { at: coords[0], time: pts[0].time } : null,
-    latest: pts.length > 1 ? { at: coords[last], time: pts[last].time } : null,
+    latest: pts.length > 1 ? { at: coords[last], time: pts[last].time, bearing: arrived() } : null,
   };
 }

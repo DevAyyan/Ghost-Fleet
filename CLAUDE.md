@@ -22,10 +22,17 @@ backend/ghostfleet/
 frontend/src/               React 19 + TypeScript + Vite 8 + MapLibre GL 4.7
   api/types.ts              TypeScript interfaces mirroring backend schemas
   lib/layers.ts             Layer definitions, defaults, period utilities
+  lib/icons.ts              Chart symbols (hulls, ghost hull, slick, anchor, ...) shared by the map, legend and lists
+  lib/ship3d.ts             Ships as small 3D models written out as SVG (by kind, heading, look); used on the map and in cards
+  lib/sdf.ts                Distance-field images: the small ship marks of a wide view, sharp at any size and rotation
+  lib/vessel.ts             Vessel class from GFW type or gear -> which hull silhouette to draw
+  components/Glyph.tsx      A chart symbol as inline SVG
   components/LayerRail.tsx  Left navigation rail: period filter, ship search, layer list
   components/SeaDrawer.tsx  Case drawer for events, hotspots, slicks, fishing, and joint dark operations
   components/VesselDrawer.tsx  Single ship timeline, path visualization, and dark gaps
-  components/MapView.tsx    MapLibre map: bathymetric ocean basemap, hull polygons, badges, track pathing
+  components/ShipProfile.tsx   Figure of the vessel type as a 3D model, with its recorded length
+  components/VesselTimeline.tsx  The period on one line: dark stretches against fishing, port calls, meetings
+  components/MapView.tsx    MapLibre map: ocean basemap, ship marks far out and 3D ship models close in, hover cards, track pathing
 backend/scripts/
   ingest_real.py            Ingests live global SAR and environmental data -> panel_real.json
   build_scan.py             Precomputes the trend scan -> scan_real.json.gz (keyed to the panel's SHA-256)
