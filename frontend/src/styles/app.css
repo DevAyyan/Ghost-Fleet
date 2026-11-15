@@ -222,6 +222,15 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 .map-key-list li { display: flex; align-items: center; gap: var(--s-2); }
 .map-key-art { flex: none; width: 1.9rem; display: grid; place-items: center; }
 .map-key-art.notake { color: var(--notake); }
+/* what the map is still loading, or failed to load */
+.load-status { top: calc(var(--s-4) + 2.5rem); left: var(--s-4); max-width: min(22rem, calc(100% - 2 * var(--s-4))); padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-xs); border-radius: var(--r-2); display: grid; gap: var(--s-1); box-shadow: 0 1px 4px rgb(0 0 0 / 0.18); }
+.load-status p { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.load-failed { color: var(--danger); }
+.load-spin { flex: none; width: 10px; height: 10px; border: 2px solid var(--rule-strong); border-top-color: var(--ink); border-radius: 50%;
+  animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .load-spin { animation: none; } }
 .map-status { top: var(--s-4); right: 3.5rem; padding: var(--s-2) var(--s-3); font-size: var(--fs-xs); }
 
 /* timeline as a chart scale bar */

@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { EventDrawer } from "./components/EventDrawer";
 import { Header } from "./components/Header";
 import { LayerRail } from "./components/LayerRail";
+import { LoadStatus } from "./components/LoadStatus";
 import { MapKey } from "./components/MapKey";
 import { MapView } from "./components/MapView";
 import { DrawerBack } from "./components/DrawerFrame";
@@ -158,6 +159,15 @@ export default function App() {
             showNoTakeAreas={showNoTakeAreas} noTakeOnly={noTakeOnly} />
           </ErrorBoundary>
           <MapKey visible={visible} noTakeAreas={showNoTakeAreas} />
+          <LoadStatus items={[
+            ...(visible.aisOff || visible.hotspots || visible.turnOns ? [{ name: "AIS-off events", ...aisOff }] : []),
+            ...(visible.fishing ? [{ name: "fishing in protected areas", ...fishing }] : []),
+            ...(visible.slicks ? [{ name: "oil slicks", ...slicks }] : []),
+            ...(visible.encounters ? [{ name: "meetings at sea", ...encounters }] : []),
+            ...(visible.loitering ? [{ name: "carriers waiting offshore", ...loitering }] : []),
+            ...(visible.closures ? [{ name: "seasonal bans", ...closures }] : []),
+            ...(visible.changes ? [{ name: "lasting changes", ...cells }] : []),
+          ]} />
         </section>
 
         <ErrorBoundary resetKey={selection ? `${selection.kind}:${selection.id}` : null} onReset={close}
