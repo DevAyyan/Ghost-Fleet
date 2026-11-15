@@ -14,7 +14,10 @@ export function DrawerFrame({ title, onClose, children, extra, icon }: {
   const heading = useRef<HTMLHeadingElement>(null);
   const back = useContext(DrawerBack);
 
-  useEffect(() => { heading.current?.focus(); }, [title]);
+  useEffect(() => {
+    if (document.activeElement?.closest(".case-tour")) return;   // a case tour is leading: leave the keyboard with it
+    heading.current?.focus();
+  }, [title]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !document.querySelector("dialog[open]")) onClose();

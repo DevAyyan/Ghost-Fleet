@@ -13,6 +13,9 @@ import { SeaDrawer, closureRecord, seaTitle, type SeaRecord } from "./components
 import { VesselDrawer, useVessel } from "./components/VesselDrawer";
 import type { OilSlick } from "./api/types";
 import { useResource } from "./hooks/useResource";
+import { rankLeads } from "./lib/leads";
+import { buildTour, type TourStep } from "./lib/tour";
+import { CaseTour } from "./components/CaseTour";
 import { DEFAULT_VISIBLE, imageDay, lastDays, monthsIn, periodProblem, type LayerId, type Period, type Selection } from "./lib/layers";
 
 const KINDS = ["event", "cell", "vessel", "aisOff", "hotspot", "turnOn", "slick", "fishing", "encounter", "loitering", "closure"] as const;
@@ -99,9 +102,9 @@ export default function App() {
   // opening a layer only shows its notes and records: the eye beside it alone decides whether it is drawn
   const openLayer = useCallback((id: LayerId | null) => setOpen(id), []);
 
-  const seaItem = useMemo<SeaRecord | null>(() => {
-    if (!selection) return null;
-    const { kind, id } = selection;
+  const lookup = useCallback((sel: Selection): SeaRecord | null => {
+    if (!sel) return null;
+    const { kind, id } = sel;
     if (kind === "aisOff") { const r = aisOff.data?.events.find((e) => e.id === id); return r ? { kind, record: r } : null; }
     if (kind === "hotspot") { const r = aisOff.data?.hotspots.find((h) => h.id === id); return r ? { kind, record: r } : null; }
     if (kind === "turnOn") { const r = aisOff.data?.turnOnClusters?.find((t) => t.id === id); return r ? { kind, record: r } : null; }
@@ -111,7 +114,28 @@ export default function App() {
     if (kind === "loitering") { const r = loitering.data?.events.find((e) => e.id === id); return r ? { kind, record: r } : null; }
     if (kind === "closure") { const r = closureRecord(closures.data?.closures, id); return r ? { kind, record: r } : null; }
     return null;
-  }, [selection, aisOff.data, slicks.data, fishing.data, encounters.data, loitering.data, closures.data]);
+  }, [aisOff.data, slicks.data, fishing.data, encounters.data, loitering.data, closures.data]);
+  const seaItem = useMemo(() => lookup(selection), [lookup, selection]);
+
+  // the period's strongest leads across every layer, and the case tour that follows the top one with a ship
+  const leads = useMemo(() => rankLeads({
+    aisOff: aisOff.data?.events, turnOns: aisOff.data?.turnOnClusters, fishing: fishing.data?.events,
+    encounters: encounters.data?.events, slicks: slicks.data?.slicks,
+  }), [aisOff.data, fishing.data, encounters.data, slicks.data]);
+  const leadsLoading = [aisOff, fishing, slicks].some((r) => r.status === "loading");
+  const [tour, setTour] = useState<{ steps: TourStep[]; at: number } | null>(null);
+  const tourLead = leads.find((l) => l.vesselId) ?? leads[0];
+  const startTour = tourLead ? () => {
+    const steps = buildTour(tourLead, lookup({ kind: tourLead.kind, id: tourLead.id })?.record.statements ?? []);
+    setTour({ steps, at: 0 });
+    select(steps[0].sel);
+  } : undefined;
+  const tourStep = (at: number) => {
+    if (!tour || at < 0 || at >= tour.steps.length) return;
+    setTour({ ...tour, at });
+    select(tour.steps[at].sel);
+  };
+  useEffect(() => setTour(null), [period]);   // a new period has other leads
   const focus = useMemo(() => spot ?? (seaItem ? { lon: seaItem.record.lon, lat: seaItem.record.lat, key: `${seaItem.kind}:${seaItem.record.id}` } : null),
     [spot, seaItem]);
 
@@ -135,7 +159,7 @@ export default function App() {
       <Header meta={meta.data} />
       <main className={`main${drawerOpen ? " has-drawer" : ""}${railOpen ? "" : " rail-closed"}`}>
         <LayerRail meta={meta.data} visible={visible} onToggle={toggle} open={open} onOpen={openLayer}
-          selection={selection} onSelect={select} aisOff={aisOff} slicks={slicks} fishing={fishing}
+          selection={selection} onSelect={select} leads={leads} leadsLoading={leadsLoading} onTour={startTour} aisOff={aisOff} slicks={slicks} fishing={fishing}
           encounters={encounters} loitering={loitering} closures={closures}
           period={period} onPeriod={changePeriod} lanesMonth={lanesMonth}
           nightDay={imageDay(period, 3)} chlDay={imageDay(period, 3)}
@@ -158,6 +182,7 @@ export default function App() {
             slickLink={selection?.kind === "vessel" ? slickLink?.slick ?? null : null}
             showNoTakeAreas={showNoTakeAreas} noTakeOnly={noTakeOnly} />
           </ErrorBoundary>
+          {tour && <CaseTour steps={tour.steps} at={tour.at} onStep={tourStep} onEnd={() => setTour(null)} />}
           <MapKey visible={visible} noTakeAreas={showNoTakeAreas} />
           <LoadStatus items={[
             ...(visible.aisOff || visible.hotspots || visible.turnOns ? [{ name: "AIS-off events", ...aisOff }] : []),

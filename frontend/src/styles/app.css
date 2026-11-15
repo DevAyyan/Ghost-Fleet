@@ -142,6 +142,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 .leads-note { padding: 2px var(--s-5) var(--s-2); font-size: var(--fs-xs); color: var(--sounding); max-width: 40ch; }
 .leads > .layer-empty, .leads > .state { padding: 0 var(--s-5); }
 .leads-list { margin: 0; }
+.leads-tour { margin: 0 var(--s-5) var(--s-2); }
 .lead-btn { grid-template-columns: 1.9rem 1fr; column-gap: var(--s-2); align-items: start; }
 .lead-sym { margin-top: 2px; }
 .lead-text { display: grid; gap: 1px; min-width: 0; }
@@ -231,6 +232,15 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
   animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .load-spin { animation: none; } }
+/* the case tour: one card that walks through a lead */
+.case-tour { top: var(--s-4); left: 50%; transform: translateX(-50%); width: min(26rem, calc(100% - 7rem)); padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-2); box-shadow: 0 2px 10px rgb(0 0 0 / 0.25); border-width: 2px; z-index: 3; }
+.tour-count { font-size: var(--fs-xs); color: var(--sounding); }
+.case-tour h2 { font: 600 var(--fs-lg)/1.2 var(--serif); margin: 2px 0 var(--s-1); }
+.case-tour h2:focus { outline: none; }
+.tour-text { font: 400 var(--fs-sm)/1.5 var(--serif); }
+.tour-actions { display: flex; gap: var(--s-2); margin-top: var(--s-3); }
+.tour-end { margin-left: auto; }
 .map-status { top: var(--s-4); right: 3.5rem; padding: var(--s-2) var(--s-3); font-size: var(--fs-xs); }
 
 /* timeline as a chart scale bar */
