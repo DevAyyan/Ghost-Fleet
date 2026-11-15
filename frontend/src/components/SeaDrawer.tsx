@@ -156,7 +156,7 @@ function figure(item: SeaRecord): { ship: ShipOptions; label: string; caption: s
   }
 }
 
-function title(item: SeaRecord): string {
+export function seaTitle(item: SeaRecord): string {
   switch (item.kind) {
     case "aisOff": return `${item.record.vesselName ?? "Unnamed vessel"} went dark`;
     case "hotspot": return `Where ships go dark: ${item.record.place}`;
@@ -180,7 +180,7 @@ export function SeaDrawer({ item, onClose, onOpenVessel, period, onOpenSlickSour
   const next = statements.filter((s) => s.label === "RECOMMENDATION");
   const fig = figure(item);
   return (
-    <DrawerFrame title={title(item)} onClose={onClose} icon={icon(item)}>
+    <DrawerFrame title={seaTitle(item)} onClose={onClose} icon={icon(item)}>
       {fig && <ShipFigure ship={fig.ship} label={fig.label}>{fig.caption}</ShipFigure>}
       <Section title="What was seen">
         {seen.map((s) => <StatementRow key={s.text} statement={s} />)}

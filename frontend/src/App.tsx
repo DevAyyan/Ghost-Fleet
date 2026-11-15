@@ -7,7 +7,8 @@ import { Header } from "./components/Header";
 import { LayerRail } from "./components/LayerRail";
 import { MapKey } from "./components/MapKey";
 import { MapView } from "./components/MapView";
-import { SeaDrawer, closureRecord, type SeaRecord } from "./components/SeaDrawer";
+import { DrawerBack } from "./components/DrawerFrame";
+import { SeaDrawer, closureRecord, seaTitle, type SeaRecord } from "./components/SeaDrawer";
 import { VesselDrawer, useVessel } from "./components/VesselDrawer";
 import type { OilSlick } from "./api/types";
 import { useResource } from "./hooks/useResource";
@@ -76,10 +77,12 @@ export default function App() {
   const months = useMemo(() => monthsIn(period, allMonths), [period, allMonths]);
   const lanesMonth = months[months.length - 1] ?? null;
 
-  const close = useCallback(() => { setSelection(null); setSpot(null); setSlickLink(null); }, []);
+  // the cases opened on the way to this one, newest last: a case opened from inside another can go back to it
+  const [trail, setTrail] = useState<{ sel: NonNullable<Selection>; label: string }[]>([]);
+  const close = useCallback(() => { setSelection(null); setSpot(null); setSlickLink(null); setTrail([]); }, []);
   const changePeriod = useCallback((p: Period) => { setPeriod(p); setSpot(null); }, []);
 
-  const select = useCallback((sel: Selection) => {
+  const choose = useCallback((sel: Selection) => {
     setSelection(sel);
     setSpot(null);
     setSlickLink(null);
@@ -89,6 +92,8 @@ export default function App() {
       setOpen(layer);
     }
   }, []);
+  // picked from the rail or the map: a fresh start, nothing to go back to
+  const select = useCallback((sel: Selection) => { setTrail([]); choose(sel); }, [choose]);
   const toggle = useCallback((id: LayerId) => setVisible((v) => ({ ...v, [id]: !v[id] })), []);
   // opening a layer only shows its notes and records: the eye beside it alone decides whether it is drawn
   const openLayer = useCallback((id: LayerId | null) => setOpen(id), []);
@@ -108,6 +113,18 @@ export default function App() {
   }, [selection, aisOff.data, slicks.data, fishing.data, encounters.data, loitering.data, closures.data]);
   const focus = useMemo(() => spot ?? (seaItem ? { lon: seaItem.record.lon, lat: seaItem.record.lat, key: `${seaItem.kind}:${seaItem.record.id}` } : null),
     [spot, seaItem]);
+
+  const caseLabel = selection?.kind === "vessel" ? (vessel.data?.identity.name ?? "the ship")
+    : seaItem ? seaTitle(seaItem) : selection?.kind === "event" || selection?.kind === "cell" ? "the change" : "the last case";
+  /** Open a case from inside another, remembering the way back. */
+  const follow = (sel: Selection) => {
+    if (selection) setTrail((t) => [...t, { sel: selection, label: caseLabel }]);
+    choose(sel);
+  };
+  const back = trail.length ? {
+    label: trail[trail.length - 1].label,
+    onBack: () => { const last = trail[trail.length - 1]; setTrail((t) => t.slice(0, -1)); choose(last.sel); },
+  } : null;
 
   const alpha = meta.data?.alpha ?? 0.05;
   const drawerOpen = selection?.kind === "event" || selection?.kind === "cell" || selection?.kind === "vessel" || !!seaItem;
@@ -145,21 +162,23 @@ export default function App() {
 
         <ErrorBoundary resetKey={selection ? `${selection.kind}:${selection.id}` : null} onReset={close}
           title="This record could not be shown">
+        <DrawerBack.Provider value={back}>
         {selection?.kind === "event" && (
           <EventDrawer key={selection.id} eventId={selection.id} alpha={alpha} onClose={close}
-            onOpenCell={(id) => select({ kind: "cell", id })} />
+            onOpenCell={(id) => follow({ kind: "cell", id })} />
         )}
         {selection?.kind === "cell" && (
           <CellDrawer key={selection.id} cellId={selection.id} alpha={alpha} onClose={close}
-            onOpenEvent={(id) => select({ kind: "event", id })} />
+            onOpenEvent={(id) => follow({ kind: "event", id })} />
         )}
         {selection?.kind === "vessel" && (
           <VesselDrawer key={selection.id} vesselId={selection.id} period={period} onClose={close} fromSlick={slickLink}
             onFocus={(lat, lon, key) => setSpot({ lat, lon, key })} />
         )}
         {seaItem && <SeaDrawer key={`${seaItem.kind}:${seaItem.record.id}`} item={seaItem} onClose={close} period={period}
-          onOpenVessel={(id) => select({ kind: "vessel", id })} candidatesAvailable={slicks.data?.candidatesAvailable}
-          onOpenSlickSource={(id, slick, rank) => { select({ kind: "vessel", id }); setSlickLink({ slick, rank }); }} />}
+          onOpenVessel={(id) => follow({ kind: "vessel", id })} candidatesAvailable={slicks.data?.candidatesAvailable}
+          onOpenSlickSource={(id, slick, rank) => { follow({ kind: "vessel", id }); setSlickLink({ slick, rank }); }} />}
+        </DrawerBack.Provider>
         </ErrorBoundary>
       </main>
     </div>
