@@ -141,3 +141,18 @@ def test_errors_have_one_shape(client, method, path, body, status, code):
     assert r.status_code == status
     err = r.json()["error"]
     assert err["code"] == code and isinstance(err["message"], str)
+
+
+def test_refresh_is_not_open_to_the_public(client, monkeypatch):
+    monkeypatch.setenv("GHOSTFLEET_REFRESH_TOKEN", "s3cret")
+    r = client.post("/api/refresh")
+    assert r.status_code == 403 and r.json()["error"]["code"] == "FORBIDDEN"
+    assert client.post("/api/refresh", headers={"X-Refresh-Token": "wrong"}).status_code == 403
+    assert client.post("/api/refresh", headers={"X-Refresh-Token": "s3cret"}).status_code == 200
+
+
+def test_event_cells_are_exactly_the_cells_inside_events(client):
+    cells = client.get("/api/cells?only=events").json()["cells"]
+    assert cells and all(c["eventId"] for c in cells)
+    full = [c for c in client.get("/api/cells").json()["cells"] if c["eventId"]]
+    assert [c["cellId"] for c in cells] == [c["cellId"] for c in full]

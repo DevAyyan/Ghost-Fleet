@@ -369,6 +369,16 @@ class AisOffResponse(Envelope):
     source: str = "Global Fishing Watch events API (public-global-gaps-events), gaps classed as likely intentional"
 
 
+class SlickCandidate(Model):
+    rank: int = Field(description="Cerulean's rank among this slick's candidate sources (1 = best match)")
+    type: Literal["VESSEL", "DARK_VESSEL", "INFRASTRUCTURE", "UNKNOWN"]
+    ref: str = Field(description="MMSI for a vessel on AIS, Cerulean's detection id for a dark vessel, structure id for infrastructure")
+    score: float | None = Field(description="Cerulean's collated match score: higher is a better fit; only meaningful within one slick")
+    url: str | None
+    went_dark: bool = Field(False, description="This MMSI switched AIS off (likely intentionally) within 48 h of the slick")
+    vessel_name: str | None = Field(None, description="Known from a matching AIS-off event, else looked up on demand")
+
+
 class OilSlick(Model):
     id: str
     lat: float
@@ -381,6 +391,7 @@ class OilSlick(Model):
     place: str
     url: str | None
     statements: list[Statement]
+    candidates: list[SlickCandidate] = Field(default_factory=list, description="Ranked candidate sources (Cerulean), best first")
 
 
 class SlicksResponse(Envelope):
@@ -388,6 +399,7 @@ class SlicksResponse(Envelope):
     window_days: int
     total_matched: int | None = Field(description="Slicks above the size and confidence floor in the window; the largest are returned")
     slicks: list[OilSlick]
+    candidates_available: bool = Field(True, description="False if Cerulean's source matching could not be fetched this time")
     start: str | None = None
     end: str | None = None
     source: str = "SkyTruth Cerulean (machine-detected on Sentinel-1 radar; not verified by a person)"
@@ -462,3 +474,140 @@ class VesselSearchResponse(Envelope):
     query: str
     results: list[VesselIdentity]
 
+
+
+# ---------- /api/sea/encounters: meetings at sea (possible transshipment) ----------
+class Authorisation(str, Enum):
+    AUTHORISED = "AUTHORISED"
+    PARTLY = "PARTLY"
+    NOT_FOUND = "NOT_FOUND"     # no matching public RFMO authorisation found: not proof of being unauthorised
+    UNKNOWN = "UNKNOWN"
+
+
+class EncounterVessel(Model):
+    vessel_id: str | None
+    name: str | None
+    flag: str | None
+    vessel_type: str | None
+    mmsi: str | None
+    authorisation: Authorisation
+    went_dark: bool = Field(False, description="Switched AIS off (likely intentionally) within 48 h before or after the encounter")
+
+
+class Encounter(Model):
+    id: str
+    lat: float
+    lon: float
+    start: str | None
+    end: str | None
+    duration_hours: float | None
+    type: str | None = Field(description="GFW encounter type, e.g. carrier-fishing, bunker-fishing")
+    median_distance_km: float | None
+    median_speed_knots: float | None
+    potential_risk: bool = Field(description="GFW's own flag: at least one vessel lacks a matching public authorisation")
+    shore_km: float | None
+    high_seas: bool
+    place: str
+    rfmo: list[str]
+    vessels: list[EncounterVessel]
+    dark_link: bool = Field(description="Either vessel switched AIS off within 48 h of the meeting")
+    statements: list[Statement]
+
+
+class EncountersResponse(Envelope):
+    fetched_at: str
+    start: str
+    end: str
+    truncated: bool
+    total: int
+    events: list[Encounter]
+    source: str = "Global Fishing Watch events API (public-global-encounters-events), cross-checked with AIS gap events"
+
+
+# ---------- /api/sea/loitering: carriers waiting far offshore ----------
+class Loitering(Model):
+    id: str
+    lat: float
+    lon: float
+    start: str | None
+    end: str | None
+    duration_hours: float | None
+    distance_km: float | None
+    speed_knots: float | None
+    shore_km: float | None
+    high_seas: bool
+    place: str
+    vessel_id: str | None
+    vessel_name: str | None
+    flag: str | None
+    vessel_type: str | None
+    met_vessel: bool = Field(description="The same vessel had a recorded encounter within 24 h of loitering")
+    statements: list[Statement]
+
+
+class LoiteringResponse(Envelope):
+    fetched_at: str
+    start: str
+    end: str
+    truncated: bool
+    total: int
+    events: list[Loitering]
+    source: str = "Global Fishing Watch events API (public-global-loitering-events), carriers and bunkers 20+ nm offshore"
+
+
+# ---------- /api/sea/vessels/{id}/insights ----------
+class VesselInsights(Envelope):
+    fetched_at: str
+    vessel_id: str
+    start: str
+    end: str
+    iuu_listed_in_period: bool
+    iuu_times_listed: int = Field(description="Times the vessel has appeared on an RFMO IUU vessel list, ever")
+    fishing_events: int | None
+    fishing_in_rfmo_without_known_authorisation: int | None
+    fishing_in_no_take_mpas: int | None
+    ais_off_events: int | None
+    coverage_pct: float | None = Field(description="Share of the period with AIS positions")
+    statements: list[Statement]
+    source: str = "Global Fishing Watch vessel insights API"
+
+
+# ---------- /api/sea/closures: fishing during seasonal bans ----------
+class ClosureCell(Model):
+    lat: float
+    lon: float
+    hours: float
+    vessels: int
+
+
+class ClosureSeason(Model):
+    id: str
+    year: int
+    start: str
+    end: str
+    days: int
+    hours_before: float
+    hours_during: float
+    hours_after: float
+    ratio: float | None = Field(description="Fishing hours during the ban ÷ mean of the equal-length windows before and after")
+    cells_during: int
+    cells: list[ClosureCell]
+    statements: list[Statement]
+
+
+class Closure(Model):
+    id: str
+    country: str
+    name: str
+    eez: str
+    window: str = Field(description="The ban each year, e.g. '1 Jun to 31 Jul'")
+    scope: str
+    confidence: ConfidenceLevel = Field(description="How sure we are of the rule's dates and scope")
+    sources: list[str]
+    seasons: list[ClosureSeason]
+
+
+class ClosuresResponse(Envelope):
+    fetched_at: str
+    closures: list[Closure]
+    source: str = "Global Fishing Watch 4Wings fishing effort (AIS) per EEZ; ban dates from official notices"

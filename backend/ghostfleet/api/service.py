@@ -12,7 +12,7 @@ import re
 from ..analytics.causelens import confidence, rank_explanations, recommended_action
 from ..analytics.disprove import disprove
 from ..analytics.msdi import STEP_LABELS, STEPS, correction_series
-from ..analytics.scan import scan
+from ..analytics.scan import ScanResult, scan
 from ..analytics.trend import TrendResult
 from ..panel import Panel
 from ..places import sea_name
@@ -80,11 +80,13 @@ def cell_label(cell_id: str) -> str:
 
 
 class GhostFleetService:
-    def __init__(self, panel: Panel, alpha: float = 0.05, extras: RealExtras | None = None):
+    def __init__(self, panel: Panel, alpha: float = 0.05, extras: RealExtras | None = None,
+                 result: ScanResult | None = None):
+        """`result`: a precomputed scan of this exact panel (see analytics/scan_io.py); otherwise the scan runs here."""
         self.panel = panel
         self.extras = extras
         self.alpha = alpha
-        self.result = scan(panel, alpha=alpha)
+        self.result = result if result is not None else scan(panel, alpha=alpha)
         self.months = [str(m) for m in panel.months.astype("datetime64[M]")]
         self.cell_event = {c: e["id"] for e in self.result.events for c in e["cells"]}
         self.events = {e["id"]: e for e in self.result.events}
@@ -96,6 +98,7 @@ class GhostFleetService:
             self.step_labels["environment"] = ("− wind" if has_wind else "− chlorophyll" if has_chl
                                                else "− weather (no data in this build)")
         self._cells_cache: S.CellsResponse | None = None
+        self._event_cells_cache: S.CellsResponse | None = None
 
     # ---------- helpers ----------
     def _steps(self, cell_id: str) -> list[S.WaterfallStep]:
@@ -180,6 +183,14 @@ class GhostFleetService:
             self._cells_cache = S.CellsResponse(is_demo_data=self.panel.is_synthetic, months=self.months,
                                                 cells=[self._summary(c) for c in self.panel.cell_ids])
         return self._cells_cache
+
+    def event_cells(self) -> S.CellsResponse:
+        """Only the cells inside a change event: what the map draws, without summarising every cell (~7 s globally)."""
+        if self._event_cells_cache is None:
+            ids = [c for c in self.panel.cell_ids if c in self.cell_event]
+            self._event_cells_cache = S.CellsResponse(is_demo_data=self.panel.is_synthetic, months=self.months,
+                                                      cells=[self._summary(c) for c in ids])
+        return self._event_cells_cache
 
     def cell(self, cell_id: str) -> S.CellDetailResponse:
         if cell_id not in self.result.cells:

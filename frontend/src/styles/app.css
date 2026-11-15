@@ -134,6 +134,13 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 .sym-changes { width: 16px; height: 11px; border: 1.5px dashed var(--magenta); background: var(--magenta-tint); }
 .sym-nightLights { width: 14px; height: 14px; background: var(--ink) radial-gradient(circle at 65% 40%, #ffe9a8 0 1.5px, transparent 2.5px); }
 .sym-chlorophyll { width: 14px; height: 14px; background: linear-gradient(90deg, #2f3e9e, #2bb3a3, #cbd83a); }
+.sym-borders { width: 18px; height: 0; border-top: 2px dashed #3d4f63; }
+.sym-encounters { width: 12px; height: 12px; border-radius: 50%; background: #c2410c; box-shadow: 0 0 0 2px var(--magenta); }
+.sym-loitering { width: 11px; height: 11px; border-radius: 50%; border: 2px solid #0f766e; background: var(--paper); }
+.sym-closures { width: 12px; height: 12px; border-radius: 50%; background: rgb(109 40 217 / 0.75); }
+.sym-infra { width: 14px; height: 8px; background: radial-gradient(circle at 25% 50%, #5a3e1b 0 3px, transparent 3.5px), radial-gradient(circle at 75% 50%, #1f6b4a 0 3px, transparent 3.5px); }
+.sym-effort { width: 14px; height: 14px; background: linear-gradient(90deg, rgb(196 92 0 / 0.15), rgb(196 92 0 / 0.95)); }
+.maplibregl-popup-content { font: var(--fs-sm) / 1.4 var(--sans); color: var(--ink); padding: var(--s-2) var(--s-6) var(--s-2) var(--s-3); }
 
 .feed { list-style: none; margin: var(--s-1) calc(-1 * var(--s-5)) 0; padding: 0; border-top: 1px solid var(--rule); }
 .feed { max-height: 34vh; overflow-y: auto; }   /* keeps the layers below an open one in view */

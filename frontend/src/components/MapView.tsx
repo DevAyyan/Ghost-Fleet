@@ -2,10 +2,12 @@ import maplibregl, { type GeoJSONSource, type RasterTileSource } from "maplibre-
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { AisOffResponse, CellSummary, CoordinatedTurnOn, EventSummary, OilSlick, ProtectedFishingEvent, VesselResponse } from "../api/types";
+import type {
+  AisOffResponse, CellSummary, Closure, CoordinatedTurnOn, Encounter, EventSummary, Loitering, OilSlick, ProtectedFishingEvent, VesselResponse,
+} from "../api/types";
 import { directionGlyph, directionWord, formatDateTime, formatDay, formatPct } from "../lib/format";
 import { chaikin, clusterShape, convexHull, pointInRing, scaleRing, type Pt } from "../lib/geometry";
-import { gibsTiles, type LayerId, type Selection } from "../lib/layers";
+import { gibsTiles, type LayerId, type Period, type Selection } from "../lib/layers";
 import { TRACK_RAMP, trackFeatures } from "../lib/track";
 
 interface Props {
@@ -24,10 +26,18 @@ interface Props {
   track?: VesselResponse;            // the ship open in the drawer: its path through its recorded events
   highlightIllegalZones?: boolean;
   noTakeOnly?: boolean;
+  encounters: Encounter[];
+  loitering: Loitering[];
+  closures: Closure[];
+  period: Period;                    // fishing-effort tiles follow it
+  slickLink?: OilSlick | null;       // the slick the open ship is a candidate source of
 }
 
 const DIR_COLOR = { INCREASING: "#a3166f", DECREASING: "#2d6a9f", NONE: "#566676" } as const;   // chart magenta / shelf blue
 const MAGENTA = "#a3166f", INK = "#13263b", PAPER = "#f3f6f5", SLICK = "#8a5a00", FISHING = "#a3271b", TURNON = "#0284c7";
+const ENCOUNTER = "#c2410c", LOITER = "#0f766e", CLOSURE = "#6d28d9", BORDER = "#3d4f63";
+const INFRA_COLOR = ["match", ["get", "label"], "oil", "#5a3e1b", "wind", "#1f6b4a", "#7a8794"] as maplibregl.ExpressionSpecification;
+const INFRA_WORD: Record<string, string> = { oil: "Oil or gas platform", wind: "Wind turbine" };
 
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean";
 const nightTiles = (day: string) => gibsTiles("VIIRS_NOAA20_DayNightBand_At_Sensor_Radiance", 8, day);   // the Suomi-NPP layer stopped updating
@@ -139,10 +149,20 @@ function turnOnZones(clusters: CoordinatedTurnOn[] = []): GeoJSON.FeatureCollect
   return { type: "FeatureCollection", features };
 }
 
-const POINT_LAYERS = [["fishing-pt", "fishing"], ["aisoff-pt", "aisOff"], ["turnon-pt", "turnOn"], ["slick-pt", "slick"]] as const;
+const POINT_LAYERS = [["fishing-pt", "fishing"], ["encounter-pt", "encounter"], ["closure-pt", "closure"], ["aisoff-pt", "aisOff"],
+  ["turnon-pt", "turnOn"], ["loiter-pt", "loitering"], ["slick-pt", "slick"]] as const;
+
+/** A GFW date property (epoch ms, epoch s, or ISO) -> "2019". */
+function yearOf(v: unknown): string | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  const d = Number.isFinite(n) ? new Date(n < 1e11 ? n * 1000 : n) : new Date(String(v));
+  return Number.isNaN(d.getTime()) ? null : String(d.getUTCFullYear());
+}
 
 export function MapView({ visible, aisOff, slicks, fishing, cells, events, selection, focus, onSelect,
-                          lanesMonth, nightDay, chlDay, track, highlightIllegalZones = true, noTakeOnly = false }: Props) {
+                          lanesMonth, nightDay, chlDay, track, highlightIllegalZones = true, noTakeOnly = false,
+                          encounters, loitering, closures, period, slickLink = null }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -153,8 +173,25 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
   const labelMarkers = useRef<maplibregl.Marker[]>([]);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
-  const initial = useRef({ lanesMonth, nightDay, chlDay });
+  const initial = useRef({ lanesMonth, nightDay, chlDay, period });
+  const popup = useRef<maplibregl.Popup | null>(null);
   const trackGeo = useMemo(() => trackFeatures(track), [track]);
+  /** The slick joined to the open ship's recorded position nearest in time to the radar image. */
+  const linkGeo = useMemo<{ geo: GeoJSON.FeatureCollection; at: Pt | null }>(() => {
+    if (!slickLink || !track?.points.length) return { geo: empty, at: null };
+    const t = Date.parse(slickLink.time && !/[zZ]|[+-]\d\d:\d\d$/.test(slickLink.time) ? `${slickLink.time}Z` : slickLink.time ?? "");
+    let best = 0;
+    track.points.forEach((p, i) => { if (Math.abs(Date.parse(p.time) - t) < Math.abs(Date.parse(track.points[best].time) - t)) best = i; });
+    const ship = trackGeo.coords[best];
+    let lon = slickLink.lon;                                  // same side of the antimeridian as the track
+    while (lon - ship[0] > 180) lon -= 360;
+    while (lon - ship[0] < -180) lon += 360;
+    const at: Pt = [lon, slickLink.lat];
+    return { at, geo: { type: "FeatureCollection", features: [
+      { type: "Feature", geometry: { type: "LineString", coordinates: [at, ship] }, properties: {} },
+      { type: "Feature", geometry: { type: "Point", coordinates: at }, properties: { slick: true } },
+    ] } };
+  }, [slickLink, track, trackGeo]);
 
   const illegalZonesGeo = useMemo(() => illegalFishingZones(fishing, noTakeOnly), [fishing, noTakeOnly]);
   const filteredFishing = useMemo(() => noTakeOnly ? fishing.filter((f) => f.fullNoTake) : fishing, [fishing, noTakeOnly]);
@@ -171,7 +208,19 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     features: (aisOff?.heat ?? []).map(([lat, lon]) => ({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties: {} })),
   }), [aisOff]);
   const aisOffGeo = useMemo(() => points(aisOff?.events ?? [], (e) => ({ id: e.id, noTake: e.inNoTake })), [aisOff]);
-  const slickGeo = useMemo(() => points(slicks, (s) => ({ id: s.id, area: s.areaKm2 })), [slicks]);
+  const slickGeo = useMemo(() => points(slicks, (s) => ({ id: s.id, area: s.areaKm2, ship: s.candidates[0]?.type === "VESSEL" })), [slicks]);
+  const encounterGeo = useMemo(() => points(encounters, (e) => ({ id: e.id, dark: e.darkLink,
+    noLicence: e.vessels.some((v) => v.authorisation === "NOT_FOUND") })), [encounters]);
+  const loiterGeo = useMemo(() => points(loitering, (l) => ({ id: l.id, met: l.metVessel })), [loitering]);
+  // each ban's spots for one year: the year open in the drawer, otherwise the latest one
+  const closureGeo = useMemo<GeoJSON.FeatureCollection>(() => ({
+    type: "FeatureCollection",
+    features: closures.flatMap((c) => {
+      const season = c.seasons.find((s) => selection?.kind === "closure" && s.id === selection.id) ?? c.seasons[c.seasons.length - 1];
+      return season ? season.cells.map((x) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [x.lon, x.lat] },
+                                                 properties: { id: season.id, hours: x.hours } })) : [];
+    }),
+  }), [closures, selection]);
 
   /** One smooth region per change event (touching significant areas, same direction). */
   const hulls = useMemo(() => {
@@ -224,8 +273,22 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       // lanes are a world-scale picture: they fade as you zoom in, where the coarse tiles would turn into grey blocks
       m.addLayer({ id: "lanes", type: "raster", source: "lanes",
                    paint: { "raster-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0.7, 6.5, 0.2] } });
+      m.addSource("effort", { type: "raster", tileSize: 256, maxzoom: 6, tiles: [api.effortTiles(first.period.start, first.period.end)],
+                              attribution: "Global Fishing Watch" });
+      m.addLayer({ id: "effort", type: "raster", source: "effort", layout: { visibility: "none" }, paint: { "raster-opacity": 0.85 } });
+      // sea borders: EEZ polygons, drawn as a dashed edge only; the invisible fill lets a click name the zone
+      m.addSource("eez", { type: "vector", tiles: [api.contextTiles("eez")], maxzoom: 9, attribution: "Marine Regions (VLIZ)" });
+      m.addLayer({ id: "eez-fill", type: "fill", source: "eez", "source-layer": "main", paint: { "fill-color": BORDER, "fill-opacity": 0 } });
+      m.addLayer({ id: "eez-line", type: "line", source: "eez", "source-layer": "main",
+                   paint: { "line-color": BORDER, "line-opacity": 0.75, "line-dasharray": [3, 2],
+                            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.6, 6, 1.4] } });
+      m.addSource("infra", { type: "vector", tiles: [api.contextTiles("infra")], minzoom: 3, maxzoom: 9, attribution: "Global Fishing Watch" });
+      m.addLayer({ id: "infra-pt", type: "circle", source: "infra", "source-layer": "main", minzoom: 3, layout: { visibility: "none" },
+                   paint: { "circle-color": INFRA_COLOR, "circle-stroke-color": PAPER, "circle-stroke-width": 0.75,
+                            "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 1.8, 8, 5] } });
 
-      for (const id of ["heat", "slick", "aisoff", "fishing", "illegal-zones", "turnons", "turnon-zones", "hulls", "picked", "track-line", "track-pt"]) {
+      for (const id of ["heat", "slick", "aisoff", "fishing", "illegal-zones", "turnons", "turnon-zones", "hulls", "picked", "track-line", "track-pt",
+                        "encounter", "loiter", "closure", "slick-link"]) {
         m.addSource(id, { type: "geojson", data: empty });
       }
 
@@ -241,7 +304,9 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       });
       m.addLayer({   // possible oil slicks: translucent brown, sized by area
         id: "slick-pt", type: "circle", source: "slick",
-        paint: { "circle-color": SLICK, "circle-opacity": 0.8, "circle-stroke-color": PAPER, "circle-stroke-width": 1,
+        // an ink edge when Cerulean matched a ship on AIS as the best candidate source
+        paint: { "circle-color": SLICK, "circle-opacity": 0.8, "circle-stroke-color": ["case", ["get", "ship"], INK, PAPER],
+                 "circle-stroke-width": ["case", ["get", "ship"], 2, 1],
                  // zoom must be the outermost interpolation, so the size-by-area ramp is repeated at both zoom stops
                  "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, bySize(1), 7, bySize(2.6)] },
       });
@@ -249,6 +314,26 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
         id: "aisoff-pt", type: "circle", source: "aisoff",
         paint: { "circle-color": PAPER, "circle-opacity": 0.9, "circle-stroke-color": MAGENTA,
                  "circle-stroke-width": zoomScale(1.25, 2.25), "circle-radius": zoomScale(2.4, 6.5) },
+      });
+
+      m.addLayer({   // fishing during a seasonal ban: violet discs sized by hours
+        id: "closure-pt", type: "circle", source: "closure",
+        paint: { "circle-color": CLOSURE, "circle-opacity": 0.75, "circle-stroke-color": PAPER, "circle-stroke-width": 0.75,
+                 "circle-radius": ["interpolate", ["linear"], ["sqrt", ["get", "hours"]], 1, 2.5, 30, 11] },
+      });
+      m.addLayer({   // carriers waiting offshore: teal ring, solid when it met a vessel
+        id: "loiter-pt", type: "circle", source: "loiter",
+        paint: { "circle-color": ["case", ["get", "met"], LOITER, PAPER], "circle-stroke-color": LOITER, "circle-stroke-width": 2,
+                 "circle-radius": zoomScale(3, 7) },
+      });
+      m.addLayer({   // meetings at sea: burnt orange; a magenta ring when AIS went off nearby
+        id: "encounter-pt", type: "circle", source: "encounter",
+        paint: { "circle-color": ENCOUNTER, "circle-stroke-color": ["case", ["get", "dark"], MAGENTA, PAPER],
+                 "circle-stroke-width": ["case", ["get", "dark"], 3, 1.25],
+                 // zoom must be the outermost interpolation: the bigger size for strong leads is repeated at each stop
+                 "circle-radius": ["interpolate", ["linear"], ["zoom"],
+                   1, ["case", ["any", ["get", "dark"], ["get", "noLicence"]], 4.5, 3.5],
+                   7, ["case", ["any", ["get", "dark"], ["get", "noLicence"]], 10.5, 8]] },
       });
 
       // Illegal fishing highlighted zones
@@ -337,10 +422,19 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
           "circle-stroke-width": ["match", ["get", "end"], "latest", 2.5, 3],
         },
       });
+      m.addLayer({ id: "slick-link-line", type: "line", source: "slick-link", filter: ["==", ["geometry-type"], "LineString"],
+                   paint: { "line-color": SLICK, "line-width": 2.5, "line-dasharray": [2, 1.5] } });
+      m.addLayer({ id: "slick-link-pt", type: "circle", source: "slick-link", filter: ["==", ["geometry-type"], "Point"],
+                   paint: { "circle-color": SLICK, "circle-opacity": 0.85, "circle-stroke-color": PAPER, "circle-stroke-width": 2,
+                            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 6, 8, 12] } });
       m.addLayer({   // ring around whatever is open in the drawer
         id: "picked", type: "circle", source: "picked",
         paint: { "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": INK, "circle-stroke-width": 2.5, "circle-radius": zoomScale(11, 16) },
       });
+      for (const layer of ["infra-pt"]) {
+        m.on("mouseenter", layer, () => { m.getCanvas().style.cursor = "pointer"; });
+        m.on("mouseleave", layer, () => { m.getCanvas().style.cursor = ""; });
+      }
       for (const [layer] of POINT_LAYERS) {
         m.on("mouseenter", layer, () => { m.getCanvas().style.cursor = "pointer"; });
         m.on("mouseleave", layer, () => { m.getCanvas().style.cursor = ""; });
@@ -357,7 +451,14 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       m.on("mouseleave", "turnon-zone-fill", () => {
         m.getCanvas().style.cursor = "";
       });
+      const box = (e: maplibregl.MapMouseEvent): [maplibregl.PointLike, maplibregl.PointLike] =>
+        [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+      const say = (e: maplibregl.MapMouseEvent, text: string) => {
+        popup.current?.remove();
+        popup.current = new maplibregl.Popup({ closeButton: true, maxWidth: "260px" }).setLngLat(e.lngLat).setText(text).addTo(m);
+      };
       m.on("click", (e) => {
+        popup.current?.remove();
         for (const [layer, kind] of POINT_LAYERS) {
           if (m.getLayoutProperty(layer, "visibility") === "none") continue;
           const hit = m.queryRenderedFeatures([[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]], { layers: [layer] })[0];
@@ -373,11 +474,27 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
           }
         }
 
+        if (m.getLayoutProperty("infra-pt", "visibility") !== "none") {
+          const p = m.queryRenderedFeatures(box(e), { layers: ["infra-pt"] })[0]?.properties as Record<string, unknown> | undefined;
+          if (p) {
+            const since = yearOf(p.structure_start_date), gone = yearOf(p.structure_end_date);
+            return say(e, `${INFRA_WORD[String(p.label)] ?? "Offshore structure, type not classified"}`
+              + `${p.label_confidence ? ` (${p.label_confidence} confidence)` : ""}. Seen on satellite images`
+              + `${since ? ` from ${since}` : ""}${gone ? ` to ${gone}` : ""}.`);
+          }
+        }
+
         if (m.getLayoutProperty("illegal-zone-fill", "visibility") !== "none") {
           const hitZone = m.queryRenderedFeatures([[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]], { layers: ["illegal-zone-fill"] })[0];
           if (hitZone) {
             m.easeTo({ center: [e.lngLat.lng, e.lngLat.lat], zoom: Math.max(m.getZoom(), 5.5), duration: 800 });
+            return;
           }
+        }
+
+        if (m.getLayoutProperty("eez-line", "visibility") !== "none") {   // whose waters is this?
+          const z = m.queryRenderedFeatures(e.point, { layers: ["eez-fill"] })[0]?.properties as { GEONAME?: string } | undefined;
+          say(e, z?.GEONAME ? `${z.GEONAME}.` : "High seas: outside every country's exclusive economic zone.");
         }
       });
       setReady(true);
@@ -400,13 +517,15 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     const set = (id: string, data: GeoJSON.FeatureCollection) => (m.getSource(id) as GeoJSONSource).setData(data);
     set("heat", heatGeo); set("aisoff", aisOffGeo); set("slick", slickGeo); set("fishing", fishingGeo);
     set("illegal-zones", illegalZonesGeo); set("turnons", turnOnsGeo); set("turnon-zones", turnOnZonesGeo);
+    set("encounter", encounterGeo); set("loiter", loiterGeo); set("closure", closureGeo); set("slick-link", linkGeo.geo);
     set("hulls", hullGeo); set("track-line", trackGeo.lines); set("track-pt", trackGeo.pts);
     set("track-ends", {
       type: "FeatureCollection",
       features: ([["start", trackGeo.start], ["latest", trackGeo.latest]] as const).flatMap(([end, e]) => (e
         ? [{ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: e.at }, properties: { end } }] : [])),
     });
-  }, [ready, heatGeo, aisOffGeo, slickGeo, fishingGeo, illegalZonesGeo, turnOnsGeo, turnOnZonesGeo, hullGeo, trackGeo]);
+  }, [ready, heatGeo, aisOffGeo, slickGeo, fishingGeo, illegalZonesGeo, turnOnsGeo, turnOnZonesGeo, hullGeo, trackGeo,
+      encounterGeo, loiterGeo, closureGeo, linkGeo]);
 
   // dated image layers follow the chosen period
   useEffect(() => {
@@ -420,13 +539,19 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     (m.getSource("night") as RasterTileSource).setTiles([nightTiles(nightDay)]);
     (m.getSource("chl") as RasterTileSource).setTiles([chlTiles(chlDay)]);
   }, [ready, nightDay, chlDay]);
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m) return;
+    (m.getSource("effort") as RasterTileSource).setTiles([api.effortTiles(period.start, period.end)]);
+  }, [ready, period.start, period.end]);
 
   // frame the open ship's whole path
-  const trackKey = track ? `${track.identity.vesselId}:${track.start}:${track.end}` : null;
+  const trackKey = track ? `${track.identity.vesselId}:${track.start}:${track.end}:${slickLink?.id ?? ""}` : null;
   useEffect(() => {
     const m = map.current;
     if (!ready || !m || !trackGeo.coords.length) return;
-    const lons = trackGeo.coords.map((c) => c[0]), lats = trackGeo.coords.map((c) => c[1]);
+    const all = linkGeo.at ? [...trackGeo.coords, linkGeo.at] : trackGeo.coords;   // keep the linked slick in view too
+    const lons = all.map((c) => c[0]), lats = all.map((c) => c[1]);
     m.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
       { padding: { top: 70, bottom: 130, left: 60, right: 60 }, maxZoom: 8, duration: 900 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -447,6 +572,9 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     show("turnon-zone-fill", visible.turnOns);
     show("turnon-zone-line", visible.turnOns);
     show("hull-fill", visible.changes); show("hull-line", visible.changes);
+    show("effort", visible.effort); show("eez-fill", visible.borders); show("eez-line", visible.borders);
+    show("infra-pt", visible.infra); show("encounter-pt", visible.encounters); show("loiter-pt", visible.loitering);
+    show("closure-pt", visible.closures);
   }, [ready, visible, highlightIllegalZones]);
 
   // ring around the open record
@@ -535,6 +663,12 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       tag.textContent = `Dark ${formatDay(p.time).replace(/ \d{4}$/, "")}`;
       labelMarkers.current.push(new maplibregl.Marker({ element: tag, anchor: "bottom", offset: [0, -9] }).setLngLat(at).addTo(m));
     }
+    if (linkGeo.at && slickLink) {   // name the linked slick: colour alone never carries meaning
+      const tag = document.createElement("span");
+      tag.className = "end-label";
+      tag.textContent = `Oil slick ${formatDay(slickLink.time).replace(/ \d{4}$/, "")}`;
+      labelMarkers.current.push(new maplibregl.Marker({ element: tag, anchor: "top", offset: [0, 14] }).setLngLat(linkGeo.at).addTo(m));
+    }
     // and its two ends, in words: direction is never shown by colour alone
     const short = (iso: string) => formatDay(iso).replace(/ \d{4}$/, "");
     for (const [cls, text, e] of [["end-start", "Start", trackGeo.start], ["end-latest", "Last seen", trackGeo.latest]] as const) {
@@ -546,7 +680,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       const above = cls === "end-start";
       labelMarkers.current.push(new maplibregl.Marker({ element: tag, anchor: above ? "bottom" : "top", offset: [0, above ? -12 : 12] }).setLngLat(e.at).addTo(m));
     }
-  }, [ready, hulls, aisOff, visible.changes, visible.hotspots, visible.turnOns, visible.fishing, highlightIllegalZones, illegalZonesGeo, selectedEventId, selection, track, trackGeo]);
+  }, [ready, hulls, aisOff, visible.changes, visible.hotspots, visible.turnOns, visible.fishing, highlightIllegalZones, illegalZonesGeo, selectedEventId, selection, track, trackGeo, linkGeo, slickLink]);
 
   return (
     <>

@@ -160,12 +160,17 @@ export interface AisOffResponse extends Envelope {
   start?: string | null; end?: string | null; truncated?: boolean;
 }
 export type SlickSource = "VESSEL" | "INFRASTRUCTURE" | "DARK_VESSEL" | "NATURAL" | "UNKNOWN";
+export interface SlickCandidate {
+  rank: number; type: "VESSEL" | "DARK_VESSEL" | "INFRASTRUCTURE" | "UNKNOWN"; ref: string; score: number | null;
+  url: string | null; wentDark: boolean; vesselName: string | null;
+}
 export interface OilSlick {
   id: string; lat: number; lon: number; time: string | null; areaKm2: number; lengthKm: number;
   confidence: number; possibleSource: SlickSource; place: string; url: string | null; statements: Statement[];
+  candidates: SlickCandidate[];
 }
 export interface SlicksResponse extends Envelope {
-  fetchedAt: string; windowDays: number; totalMatched: number | null; slicks: OilSlick[]; source: string;
+  fetchedAt: string; windowDays: number; totalMatched: number | null; slicks: OilSlick[]; source: string; candidatesAvailable?: boolean;
 }
 export interface ProtectedFishingEvent {
   id: string; lat: number; lon: number; start: string | null; end: string | null; durationHours: number | null;
@@ -192,3 +197,43 @@ export interface VesselSearchResponse extends Envelope { query: string; results:
 export type PackedDetection = [number, number, number, number];   // lat, lon, unmatched, matched
 
 export interface ApiErrorBody { error: { code: string; message: string; details?: unknown } }
+
+// ---------- /api/sea/encounters, /loitering, /closures, vessel insights ----------
+export type Authorisation = "AUTHORISED" | "PARTLY" | "NOT_FOUND" | "UNKNOWN";
+export interface EncounterVessel {
+  vesselId: string | null; name: string | null; flag: string | null; vesselType: string | null; mmsi: string | null;
+  authorisation: Authorisation; wentDark: boolean;
+}
+export interface Encounter {
+  id: string; lat: number; lon: number; start: string | null; end: string | null; durationHours: number | null;
+  type: string | null; medianDistanceKm: number | null; medianSpeedKnots: number | null; potentialRisk: boolean;
+  shoreKm: number | null; highSeas: boolean; place: string; rfmo: string[]; vessels: EncounterVessel[]; darkLink: boolean;
+  statements: Statement[];
+}
+export interface EncountersResponse extends Envelope {
+  fetchedAt: string; start: string; end: string; truncated: boolean; total: number; events: Encounter[]; source: string;
+}
+export interface Loitering {
+  id: string; lat: number; lon: number; start: string | null; end: string | null; durationHours: number | null;
+  distanceKm: number | null; speedKnots: number | null; shoreKm: number | null; highSeas: boolean; place: string;
+  vesselId: string | null; vesselName: string | null; flag: string | null; vesselType: string | null; metVessel: boolean;
+  statements: Statement[];
+}
+export interface LoiteringResponse extends Envelope {
+  fetchedAt: string; start: string; end: string; truncated: boolean; total: number; events: Loitering[]; source: string;
+}
+export interface VesselInsights extends Envelope {
+  fetchedAt: string; vesselId: string; start: string; end: string; iuuListedInPeriod: boolean; iuuTimesListed: number;
+  fishingEvents: number | null; fishingInRfmoWithoutKnownAuthorisation: number | null; fishingInNoTakeMpas: number | null;
+  aisOffEvents: number | null; coveragePct: number | null; statements: Statement[]; source: string;
+}
+export interface ClosureCell { lat: number; lon: number; hours: number; vessels: number }
+export interface ClosureSeason {
+  id: string; year: number; start: string; end: string; days: number; hoursBefore: number; hoursDuring: number;
+  hoursAfter: number; ratio: number | null; cellsDuring: number; cells: ClosureCell[]; statements: Statement[];
+}
+export interface Closure {
+  id: string; country: string; name: string; eez: string; window: string; scope: string; confidence: ConfidenceLevel;
+  sources: string[]; seasons: ClosureSeason[];
+}
+export interface ClosuresResponse extends Envelope { fetchedAt: string; closures: Closure[]; source: string }

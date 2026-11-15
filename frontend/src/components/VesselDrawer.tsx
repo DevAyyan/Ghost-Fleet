@@ -1,9 +1,10 @@
 import { api } from "../api/client";
-import type { AisOffEvent, VesselPoint } from "../api/types";
+import type { AisOffEvent, OilSlick, VesselPoint } from "../api/types";
 import { useResource } from "../hooks/useResource";
 import { formatDay, formatSpan } from "../lib/format";
 import type { Period } from "../lib/layers";
 import { DrawerFrame } from "./DrawerFrame";
+import { InsightsPanel } from "./InsightsPanel";
 import { ErrorState, Section, Skeleton, StatementRow } from "./ui";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   period: Period;
   onClose: () => void;
   onFocus: (lat: number, lon: number, key: string) => void;
+  fromSlick?: { slick: OilSlick; rank: number } | null;   // opened as a candidate source of this slick
 }
 
 const coords = (lat: number, lon: number) =>
@@ -50,7 +52,7 @@ function GapRow({ gap, n, onFocus }: { gap: AisOffEvent; n: number; onFocus: Pro
   );
 }
 
-export function VesselDrawer({ vesselId, period, onClose, onFocus }: Props) {
+export function VesselDrawer({ vesselId, period, onClose, onFocus, fromSlick }: Props) {
   const res = useVessel(vesselId, period);
   if (res.status !== "success") {
     return (
@@ -73,6 +75,17 @@ export function VesselDrawer({ vesselId, period, onClose, onFocus }: Props) {
   return (
     <DrawerFrame title={id.name ?? "Unnamed vessel"} onClose={onClose}
       extra={<span className="muted">{formatDay(v.start)} to {formatDay(v.end)}</span>}>
+      {fromSlick && (
+        <Section title="Why this ship is shown" hint="The dashed brown line on the map joins the slick to this ship's recorded position closest in time to the radar image.">
+          <StatementRow statement={{ label: "INFERENCE", text:
+            `Cerulean ranked this ship #${fromSlick.rank} among the candidate sources of a ${Math.round(fromSlick.slick.areaKm2).toLocaleString()} km² possible oil slick `
+            + `seen on ${formatDay(fromSlick.slick.time)} in ${fromSlick.slick.place}: its AIS track passed the slick near the time of the image. `
+            + "That is a lead, not evidence that it released oil." }} />
+          <div className="actions">
+            <button type="button" className="btn" onClick={() => onFocus(fromSlick.slick.lat, fromSlick.slick.lon, `slick:${fromSlick.slick.id}`)}>Show the slick</button>
+          </div>
+        </Section>
+      )}
       <Section title="In this period">
         {v.statements.map((s) => <StatementRow key={s.text} statement={s} />)}
         {first && latest && (
@@ -123,6 +136,10 @@ export function VesselDrawer({ vesselId, period, onClose, onFocus }: Props) {
           </table>
         ) : <p className="muted">Nothing recorded in this period. Try a longer period.</p>}
         {log.length > LOG_MAX && <p className="muted">The newest {LOG_MAX} of {log.length} are listed; all of them are on the map.</p>}
+      </Section>
+
+      <Section title="Licences and blacklists" hint="From Global Fishing Watch vessel insights for the chosen period. Missing from a public licence list is not proof of fishing without one.">
+        <InsightsPanel vesselId={vesselId} period={period} />
       </Section>
 
       <Section title="This ship">

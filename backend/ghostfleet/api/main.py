@@ -5,6 +5,7 @@ There is deliberately no silent fallback: if the real panel is missing, data end
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 import threading
@@ -12,7 +13,7 @@ from datetime import date
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -20,8 +21,9 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..gfw import ON_VERCEL, GFWError, GFWLive, month_axis
-from ..real import DataUnavailable, load_real_panel
-from ..sea import MAX_SPAN_DAYS, LayerNotBuilt, SeaWatch, default_period
+from ..analytics.scan_io import cache_path, load_scan, panel_digest
+from ..real import DataUnavailable, load_real_panel, panel_path
+from ..sea import CONTEXT_LAYERS, MAX_SPAN_DAYS, LayerNotBuilt, SeaWatch, default_period
 from ..synthetic import make_panel
 from . import schemas as S
 from . import sea_service
@@ -36,8 +38,13 @@ def load_service() -> GhostFleetService:
     if source == "synthetic":
         return GhostFleetService(make_panel(seed=int(os.getenv("GHOSTFLEET_SEED", "7"))))
     if source == "real":
-        panel, extras = load_real_panel()
-        return GhostFleetService(panel, extras=extras)
+        path = panel_path()
+        panel, extras = load_real_panel(path)
+        # The scan of the global panel takes ~35 s: use the copy saved by scripts/build_scan.py when it matches this panel.
+        result = load_scan(cache_path(path), panel_digest(path), alpha=0.05)
+        if result is None:
+            log.warning("no matching scan cache: scanning now (run scripts/build_scan.py to skip this on cold starts)")
+        return GhostFleetService(panel, extras=extras, result=result)
     raise RuntimeError(f"Unknown GHOSTFLEET_DATA={source!r} (use 'real' or 'synthetic')")
 
 
@@ -190,9 +197,7 @@ def get_cells(request: Request, only: str | None = Query(None, pattern="^events$
     """Every analysis cell, or with `?only=events` just the cells that belong to a change event (all the map needs)."""
     s = svc(request)
     if only == "events":
-        full = s.cells()
-        return S.CellsResponse(is_demo_data=full.is_demo_data, months=full.months,
-                               cells=[c for c in full.cells if c.event_id is not None])
+        return s.event_cells()
     if len(s.panel.cell_ids) > MAX_MAP_CELLS:
         return _err(422, "TOO_MANY_CELLS", f"Map layer has {len(s.panel.cell_ids)} cells (max {MAX_MAP_CELLS})")
     return s.cells()
@@ -262,8 +267,14 @@ def get_ais_off(request: Request, start: str | None = Query(None, pattern=DAY), 
 
 @app.get("/api/sea/slicks", response_model=S.SlicksResponse)
 def get_slicks(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
-    """Largest possible oil slicks in a period (default: the last 30 days), machine-detected on Sentinel-1 radar (SkyTruth Cerulean)."""
-    return sea_service.slicks(sea_watch(request).slicks(*period(start, end)))
+    """Largest possible oil slicks in a period (default: the last 30 days), machine-detected on Sentinel-1 radar (SkyTruth Cerulean),
+    each with Cerulean's ranked candidate sources, cross-checked against AIS switched off within 48 hours."""
+    sw, (s, e) = sea_watch(request), period(start, end)
+    try:
+        gaps = sw.ais_off(s, e)["events"]
+    except GFWError:
+        gaps = []        # the slicks still load; candidates just are not cross-checked against AIS switch-offs
+    return sea_service.slicks(sw.slicks(s, e), gaps)
 
 
 @app.get("/api/sea/protected-fishing", response_model=S.ProtectedFishingResponse)
@@ -300,9 +311,73 @@ def get_lane_tile(z: int, x: int, y: int, request: Request, month: str | None = 
                     headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})   # a month's lanes never change
 
 
+@app.get("/api/sea/encounters", response_model=S.EncountersResponse)
+def get_encounters(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
+    """Fishing vessels meeting carriers, bunkers, support vessels or tankers at sea (possible transshipment) in a period,
+    each checked for AIS switched off by either vessel within 48 hours. Strongest leads first."""
+    sw, (s, e) = sea_watch(request), period(start, end)
+    return sea_service.encounters(sw.encounters(s, e), sw.ais_off(s, e)["events"])
+
+
+@app.get("/api/sea/loitering", response_model=S.LoiteringResponse)
+def get_loitering(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
+    """Carriers and bunker tankers loitering 20+ nautical miles offshore in a period, each checked for a recorded meeting."""
+    sw, (s, e) = sea_watch(request), period(start, end)
+    return sea_service.loitering(sw.loitering(s, e), sw.encounters(s, e)["events"])
+
+
+@app.get("/api/sea/vessels/{vessel_id}/insights", response_model=S.VesselInsights)
+def get_vessel_insights(vessel_id: str, request: Request, start: str | None = Query(None, pattern=DAY),
+                        end: str | None = Query(None, pattern=DAY)):
+    """IUU-list history, fishing without a known public authorisation, no-take MPA fishing and AIS-off counts for one ship."""
+    try:
+        return sea_service.insights(sea_watch(request).insights(vessel_id, *period(start, end)))
+    except LookupError:
+        raise NotFound("Vessel", vessel_id) from None
+
+
+@app.get("/api/sea/closures", response_model=S.ClosuresResponse)
+def get_closures(request: Request):
+    """Apparent fishing during seasonal fishing bans, against the weeks around them. Built by scripts/ingest_closures.py."""
+    return sea_service.closures(sea_watch(request).closures())
+
+
+@app.get("/api/sea/context/{layer}/{z}/{x}/{y}.pbf", responses={200: {"content": {"application/x-protobuf": {}}}})
+def get_context_tile(layer: str, z: int, x: int, y: int, request: Request):
+    """Vector tile of sea borders (`eez`, Marine Regions EEZs) or offshore platforms (`infra`), proxied from Global Fishing Watch."""
+    if layer not in CONTEXT_LAYERS or not (0 <= z <= 9 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
+        raise NotFound("Tile", f"{layer}/{z}/{x}/{y}")
+    pbf = sea_watch(request).context_tile(layer, z, x, y)
+    if not pbf:
+        return Response(status_code=204, headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})
+    return Response(pbf, media_type="application/x-protobuf",
+                    headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})
+
+
+@app.get("/api/sea/effort/{z}/{x}/{y}.png", responses={200: {"content": {"image/png": {}}}})
+def get_effort_tile(z: int, x: int, y: int, request: Request, start: str | None = Query(None, pattern=DAY),
+                    end: str | None = Query(None, pattern=DAY)):
+    """Fishing-effort tile (apparent fishing hours from AIS) for a period, drawn by Global Fishing Watch."""
+    if not (0 <= z <= 6 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
+        raise NotFound("Tile", f"{z}/{x}/{y}")
+    s, e = period(start, end)
+    return Response(sea_watch(request).effort_tile(z, x, y, s, e), media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=3600, s-maxage=86400"})
+
+
 @app.post("/api/refresh", response_model=S.MetaResponse)
-def refresh(request: Request):
-    """Reload the panel from disk after `backend/scripts/ingest_real.py` has pulled new data. Safe to retry."""
+def refresh(request: Request, x_refresh_token: str | None = Header(None)):
+    """Reload the panel from disk after `backend/scripts/ingest_real.py` has pulled new data. Safe to retry.
+
+    A reload re-runs the scan and blocks analysis requests meanwhile, so it is not open to the public: it needs the
+    X-Refresh-Token header to match GHOSTFLEET_REFRESH_TOKEN, or, with no token configured, a call from this machine.
+    """
+    token = os.getenv("GHOSTFLEET_REFRESH_TOKEN")
+    host = request.client.host if request.client else ""
+    allowed = (hmac.compare_digest(x_refresh_token or "", token) if token
+               else not ON_VERCEL and host in {"127.0.0.1", "::1", "localhost", "testclient"})
+    if not allowed:
+        return _err(403, "FORBIDDEN", "Refresh needs a valid X-Refresh-Token header.")
     with _load_lock:
         _try_load(request.app)
         request.app.state.loaded = True

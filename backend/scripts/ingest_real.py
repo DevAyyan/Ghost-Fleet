@@ -357,6 +357,7 @@ def main():
     n_det = sum(sum(c["unmatched"]) + sum(c["matched"]) for c in out["cells"])
     log(f"wrote {OUT} ({OUT.stat().st_size // 1024} KB): {len(cells)} cells x {T} months, {n_det} detections, "
         f"{len(ais_regions)} AIS regions, wind for {len(wind_by_cell)} cells")
+    log("the API's scan cache is now stale: run  python3 backend/scripts/build_scan.py  before deploying")
 
 
 if __name__ == "__main__":

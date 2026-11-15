@@ -1,5 +1,5 @@
 import type {
-  AisOffResponse, ProtectedFishingResponse, SlicksResponse, VesselResponse, VesselSearchResponse,
+  AisOffResponse, ClosuresResponse, EncountersResponse, LoiteringResponse, VesselInsights, ProtectedFishingResponse, SlicksResponse, VesselResponse, VesselSearchResponse,
   ApiErrorBody, CellDetailResponse, DetectionPoint, PackedDetection, CellsResponse, DetectionsResponse, DisproofResponse, DisproofVariant,
   EventDetailResponse, EventsResponse, MetaResponse,
 } from "./types";
@@ -34,7 +34,7 @@ async function request<T>(path: string, init?: RequestInit, fetchImpl: typeof fe
   try {
     res = await fetchImpl(`${BASE}${path}`, init);
   } catch {
-    throw new ApiError(0, "NETWORK_ERROR", "Cannot reach the analysis server. Is the backend running?");
+    throw new ApiError(0, "NETWORK_ERROR", "Cannot reach the analysis server. Check your connection and try again.");
   }
   if (!res.ok) throw await toApiError(res);
   return (await res.json()) as T;
@@ -62,6 +62,14 @@ export const api = {
   slicks: (start: string, end: string) => request<SlicksResponse>(`/api/sea/slicks?start=${start}&end=${end}`),
   protectedFishing: (start: string, end: string) => request<ProtectedFishingResponse>(`/api/sea/protected-fishing?start=${start}&end=${end}`),
   vessel: (id: string, start: string, end: string) => request<VesselResponse>(`/api/sea/vessels/${encodeURIComponent(id)}?start=${start}&end=${end}`),
+  encounters: (start: string, end: string) => request<EncountersResponse>(`/api/sea/encounters?start=${start}&end=${end}`),
+  loitering: (start: string, end: string) => request<LoiteringResponse>(`/api/sea/loitering?start=${start}&end=${end}`),
+  closures: () => request<ClosuresResponse>("/api/sea/closures"),
+  insights: (id: string, start: string, end: string) =>
+    request<VesselInsights>(`/api/sea/vessels/${encodeURIComponent(id)}/insights?start=${start}&end=${end}`),
+  /** Vector tiles of sea borders ("eez") or offshore platforms ("infra"), proxied from Global Fishing Watch. */
+  contextTiles: (layer: "eez" | "infra") => `${BASE || window.location.origin}/api/sea/context/${layer}/{z}/{x}/{y}.pbf`,
+  effortTiles: (start: string, end: string) => `${BASE || window.location.origin}/api/sea/effort/{z}/{x}/{y}.png?start=${start}&end=${end}`,
   searchVessels: (q: string) => request<VesselSearchResponse>(`/api/sea/vessels/search?q=${encodeURIComponent(q)}`),
   /** MapLibre needs an absolute tile URL template. */
   laneTiles: (month?: string) => `${BASE || window.location.origin}/api/sea/lanes/{z}/{x}/{y}.png${month ? `?month=${month}` : ""}`,

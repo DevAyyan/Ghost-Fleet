@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, type ApiError } from "../api/client";
-import type { AisOffResponse, MetaResponse, ProtectedFishingResponse, SlicksResponse } from "../api/types";
+import type { AisOffResponse, ClosuresResponse, EncountersResponse, LoiteringResponse, MetaResponse, ProtectedFishingResponse, SlicksResponse } from "../api/types";
 import { useResource, type Resource } from "../hooks/useResource";
 import { formatDateTime, formatDay, formatMonth, formatP, formatSpan, humanCellId, vesselWord } from "../lib/format";
 import { EARLIEST, LAYERS, daysAgo, lastDays, periodProblem, spanDays, type LayerId, type Period, type Selection } from "../lib/layers";
@@ -17,6 +17,9 @@ interface Props {
   aisOff: Resource<AisOffResponse>;
   slicks: Resource<SlicksResponse>;
   fishing: Resource<ProtectedFishingResponse>;
+  encounters: Resource<EncountersResponse>;
+  loitering: Resource<LoiteringResponse>;
+  closures: Resource<ClosuresResponse>;
   period: Period;
   onPeriod: (p: Period) => void;
   lanesMonth: string | null;
@@ -141,7 +144,7 @@ function Pending({ r, what }: { r: Resource<unknown>; what: string }) {
 }
 
 export function LayerRail(p: Props) {
-  const { meta, visible, onToggle, open, onOpen, selection, onSelect, aisOff, slicks, fishing,
+  const { meta, visible, onToggle, open, onOpen, selection, onSelect, aisOff, slicks, fishing, encounters, loitering, closures,
           period, onPeriod, lanesMonth, nightDay, chlDay,
           highlightIllegalZones, onToggleIllegalZones, noTakeOnly, onToggleNoTakeOnly } = p;
 
@@ -151,6 +154,12 @@ export function LayerRail(p: Props) {
 
   const counts: Record<LayerId, ReactNode> = {
     lanes: null,
+    borders: null,
+    encounters: visible.encounters ? count(encounters, encounters.data?.total) : null,
+    loitering: visible.loitering ? count(loitering, loitering.data?.total) : null,
+    closures: closures.data ? <b className="layer-count num">{closures.data.closures.length}</b> : null,
+    infra: null,
+    effort: null,
     aisOff: count(aisOff, aisOff.data?.total),
     hotspots: count(aisOff, aisOff.data?.hotspots.length),
     turnOns: count(aisOff, aisOff.data?.turnOnClusters?.length),
@@ -216,9 +225,46 @@ export function LayerRail(p: Props) {
         )}
         <Rows items={slicks.data.slicks} kind="slick" selection={selection} onSelect={onSelect} label="Possible oil slicks, largest first"
           title={(s) => <>{s.place} <span className="num feed-figure">{Math.round(s.areaKm2).toLocaleString()} km²</span></>}
-          meta={(s) => `${formatDay(s.time)}. Nearest candidate source: ${SOURCE_WORD[s.possibleSource]}.`} />
+          meta={(s) => {
+            const best = s.candidates[0];
+            const who = !best ? SOURCE_WORD[s.possibleSource]
+              : best.type === "VESSEL" ? `${best.vesselName ?? `MMSI ${best.ref}`}${best.wentDark ? " (switched AIS off nearby)" : ""}`
+              : best.type === "DARK_VESSEL" ? "a ship not on AIS" : best.type === "INFRASTRUCTURE" ? "an offshore structure" : "unidentified";
+            return `${formatDay(s.time)}. Best-matching candidate source: ${who}.`;
+          }} />
       </>
     ) : <Pending r={slicks} what="oil slicks" />,
+    borders: () => <p className="muted layer-empty">Dashed lines mark where one country's waters end. Click the sea to name the zone. Solid shading is not drawn so the data stays readable.</p>,
+    encounters: () => encounters.data ? (
+      <>
+        {encounters.data.truncated && <p className="muted layer-empty">This period has more meetings than can be fetched; the newest are used.</p>}
+        <p className="muted layer-empty">{encounters.data.events.filter((e) => e.darkLink).length.toLocaleString()} with AIS switched off nearby,{" "}
+          {encounters.data.events.filter((e) => e.vessels.some((v) => v.authorisation === "NOT_FOUND")).length.toLocaleString()} involving a vessel with no public licence on record.</p>
+        <Rows items={encounters.data.events} kind="encounter" selection={selection} onSelect={onSelect} label="Meetings at sea, strongest leads first"
+          title={(e) => <>{e.vessels.map((v) => v.name ?? "Unnamed").join(" + ")}{e.darkLink && <span className="feed-figure"> AIS off</span>}</>}
+          meta={(e) => `${e.type?.replace("-", " and ") ?? "Meeting"}, ${e.place}, ${formatDay(e.start)}, ${formatSpan(e.durationHours)}.${e.vessels.some((v) => v.authorisation === "NOT_FOUND") ? " No public licence on record for one vessel." : ""}`} />
+      </>
+    ) : <Pending r={encounters} what="meetings at sea" />,
+    loitering: () => loitering.data ? (
+      <Rows items={loitering.data.events} kind="loitering" selection={selection} onSelect={onSelect} label="Carriers and bunker tankers waiting offshore"
+        title={(l) => <>{l.vesselName ?? "Unnamed vessel"}{l.metVessel && <span className="feed-figure"> met a vessel</span>}</>}
+        meta={(l) => `${vesselWord(l.vesselType)}, flag ${l.flag ?? "unknown"}. ${l.place}, ${Math.round(l.shoreKm ?? 0).toLocaleString()} km out, ${formatSpan(l.durationHours)} from ${formatDay(l.start)}.`} />
+    ) : <Pending r={loitering} what="carriers waiting offshore" />,
+    closures: () => closures.data ? (
+      <ol className="feed" aria-label="Seasonal fishing bans, each year">
+        {closures.data.closures.flatMap((c) => c.seasons.map((s) => (
+          <li key={s.id}>
+            <button type="button" className="feed-btn" aria-current={selection?.kind === "closure" && selection.id === s.id}
+              onClick={() => onSelect({ kind: "closure", id: s.id })}>
+              <span className="feed-title">{c.name} {s.year} <span className="num feed-figure">{Math.round(s.hoursDuring).toLocaleString()} h</span></span>
+              <span className="feed-meta">{c.window}. {s.ratio == null ? "" : `Fishing ${Math.round((1 - s.ratio) * 100)}% below the weeks around the ban; `}{s.cellsDuring.toLocaleString()} spots fished during it.</span>
+            </button>
+          </li>
+        )))}
+      </ol>
+    ) : <Pending r={closures} what="seasonal bans" />,
+    infra: () => <p className="muted layer-empty">Dark brown: oil and gas. Green: wind. Grey: not classified. Click one for details. Shown from zoom 3.</p>,
+    effort: () => <p className="muted layer-empty">Fishing hours from {formatDay(period.start)} to {formatDay(period.end)}. Tiles can take a few seconds the first time.</p>,
     changes: () => <ChangeList meta={meta} selection={selection} onSelect={onSelect} />,
     nightLights: () => <p className="muted layer-empty">Image date: {formatDay(nightDay)}. This layer covers the chart with a night view; the other layers stay on top.</p>,
     chlorophyll: () => <p className="muted layer-empty">Image date: {formatDay(chlDay)}.</p>,

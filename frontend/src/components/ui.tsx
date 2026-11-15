@@ -49,7 +49,7 @@ export function ErrorState({ error, onRetry, title = "Something went wrong" }: {
     <div className="state" role="alert">
       <h3>{title}</h3>
       <p className="error-text">{error.message}</p>
-      {error.code === "NETWORK_ERROR" && (
+      {import.meta.env.DEV && error.code === "NETWORK_ERROR" && (
         <p className="muted">Start it with <code className="mono">python3 -m uvicorn ghostfleet.api.main:app</code> in <code className="mono">backend/</code>.</p>
       )}
       {onRetry && <button type="button" className="btn" onClick={onRetry}>Try again</button>}

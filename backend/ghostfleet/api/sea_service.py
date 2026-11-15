@@ -333,7 +333,7 @@ def coordinated_turn_ons(events: list[dict], period_str: str, max_dist_deg: floa
             stmts.append(_st(HYP, f"Sister fleet sweep: All {len(g)} vessels are {flags[0]}-flagged fishing vessels that went dark "
                                   "upon entering and reactivated together upon exiting. Consistent with a coordinated flotilla operating "
                                   "dark together to conceal productive fishing grounds or joint sweeps."))
-        elif any(e.get("highSeas") for e in raw_events) and any(e.get("shoreKm", 999) < 370 for e in raw_events):
+        elif any(e.get("highSeas") for e in raw_events) and any(e.get("shoreKm") is not None and e["shoreKm"] < 370 for e in raw_events):
             stmts.append(_st(HYP, "Border zone incursion: Dark entry and exit points frame an EEZ boundary. Vessels may have operated dark "
                                   "inside coastal or restricted waters and reactivated transponders upon exiting back to the high seas."))
         else:
@@ -414,20 +414,53 @@ SLICK_HYP = {
 }
 
 
-def slicks(d: dict) -> S.SlicksResponse:
+CANDIDATE_WORD = {"VESSEL": "a ship on AIS", "DARK_VESSEL": "a ship seen on radar but not on AIS",
+                  "INFRASTRUCTURE": "an offshore structure", "UNKNOWN": "an unidentified source"}
+
+
+def slicks(d: dict, gaps: list[dict] | None = None) -> S.SlicksResponse:
+    """Slicks with Cerulean's ranked candidate sources, each AIS candidate cross-checked against AIS switched off within 48 h."""
+    dark_by_mmsi: dict[str, list] = {}
+    names: dict[str, str] = {}
+    for g in gaps or []:
+        if g.get("mmsi"):
+            dark_by_mmsi.setdefault(str(g["mmsi"]), []).append((_ts(g.get("start")), _ts(g.get("end"))))
+            if g.get("vesselName"):
+                names[str(g["mmsi"])] = g["vesselName"]
     out = []
     for k in d["slicks"]:
         lat, lon = float(k["lat"]), float(k["lon"])
+        t = _ts(k.get("time"))
+        cands = [S.SlickCandidate(**c, went_dark=c["type"] == "VESSEL" and _near(dark_by_mmsi.get(c["ref"], []), t, t, DARK_LINK_H),
+                                  vessel_name=names.get(c["ref"])) for c in k.get("candidates", [])]
         obs = (f"A possible oil slick of about {k['areaKm2']:.0f} km² ({k['lengthKm']:.0f} km long) was detected on Sentinel-1 radar "
                f"{_where(lat, lon)} on {_day(k.get('time'))}.")
         stmts = [_st(OBS, obs),
-                 _st(INF, f"Detected by a machine-learning model (confidence {min(k['confidence'], 0.99):.0%}) and not checked by a person."),
-                 _st(HYP, SLICK_HYP[k["possibleSource"]])]
+                 _st(INF, f"Detected by a machine-learning model (confidence {min(k['confidence'], 0.99):.0%}) and not checked by a person.")]
+        if cands:
+            best = cands[0]
+            who = f"{best.vessel_name} (MMSI {best.ref})" if best.vessel_name else (f"MMSI {best.ref}" if best.type == "VESSEL" else best.ref)
+            others = f" ({len(cands)} candidates ranked)" if len(cands) > 1 else ""
+            stmts.append(_st(INF, f"Cerulean's best-matching candidate source is {CANDIDATE_WORD[best.type]}, {who}{others}. "
+                                  "It ranks ships whose AIS track passed the slick close to the time of the radar image, and structures "
+                                  "beside it, by how well they fit its shape; a match is not evidence that the source released oil."))
+            for c in cands:
+                if c.went_dark:
+                    stmts.append(_st(OBS, f"Candidate MMSI {c.ref}{f' ({c.vessel_name})' if c.vessel_name else ''} switched AIS off "
+                                          f"(classed as likely intentional) within {DARK_LINK_H} hours of the slick."))
+            what = ("A leak from the structure" if best.type == "INFRASTRUCTURE" else
+                    "Possible illegal discharge (for example bilge or tank washing) by the top candidate")
+            stmts.append(_st(HYP, what + (", made more worth checking by an AIS switch-off" if any(c.went_dark for c in cands) else "")
+                                  + ". Also consistent with a natural seep, an earlier spill drifting, or a look-alike such as low wind."))
+            stmts.append(_st(REC, "Check the radar image, then ask the flag or port state to inspect the candidate's oil record book."))
+        else:
+            stmts.append(_st(HYP, SLICK_HYP[k["possibleSource"]]))
         out.append(S.OilSlick(id=k["id"], lat=lat, lon=lon, time=k.get("time"), area_km2=k["areaKm2"], length_km=k["lengthKm"],
                               confidence=k["confidence"], possible_source=k["possibleSource"], place=sea_name(lat, lon),
-                              url=k.get("url"), statements=stmts))
+                              url=k.get("url"), statements=stmts, candidates=cands))
     return S.SlicksResponse(is_demo_data=False, fetched_at=d["fetchedAt"], window_days=_span_days(d["start"], d["end"]),
-                            total_matched=d.get("matched"), slicks=out, start=d["start"], end=d["end"])
+                            total_matched=d.get("matched"), slicks=out, start=d["start"], end=d["end"],
+                            candidates_available=d.get("candidatesAvailable", True))
 
 
 def protected_fishing(d: dict, start: str | None = None, end: str | None = None) -> S.ProtectedFishingResponse:
@@ -499,3 +532,201 @@ def vessel(d: dict) -> S.VesselResponse:
                       "events are not shown, because raw AIS tracks are not part of the free data. Dashed stretches were sailed unseen.")]
     return S.VesselResponse(is_demo_data=False, fetched_at=d["fetchedAt"], start=start, end=end, truncated=bool(d.get("truncated")),
                             identity=identity(ident), points=points, gaps=gaps, counts=counts, statements=stmts)
+
+
+# ---------- encounters, loitering, insights, seasonal closures ----------
+DARK_LINK_H = 48
+MEET_LINK_H = 24
+PARTY_WORD = {"carrier": "refrigerated carrier", "bunker": "bunker tanker", "support": "support vessel", "tanker": "tanker",
+              "fishing": "fishing vessel"}
+AUTH_SENTENCE = {"AUTHORISED": "has a matching public RFMO authorisation", "PARTLY": "has a partly matching public RFMO authorisation",
+                 "NOT_FOUND": "has no matching public RFMO authorisation on record", "UNKNOWN": "has no authorisation information"}
+
+
+def _ts(iso: str | None) -> float | None:
+    if not iso:
+        return None
+    try:
+        d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).timestamp()   # Cerulean's times carry no zone: they are UTC
+
+
+def _gaps_by_vessel(gaps: list[dict]) -> dict[str, list[tuple[float | None, float | None]]]:
+    out: dict[str, list] = {}
+    for g in gaps:
+        if g.get("vesselId"):
+            out.setdefault(g["vesselId"], []).append((_ts(g.get("start")), _ts(g.get("end"))))
+    return out
+
+
+def _near(windows: list, t0: float | None, t1: float | None, hours: float) -> bool:
+    """Does any (start, end) window begin or end within `hours` of the span t0..t1?"""
+    if t0 is None:
+        return False
+    lo, hi = t0 - hours * 3600, (t1 or t0) + hours * 3600
+    return any((s is not None and lo <= s <= hi) or (e is not None and lo <= e <= hi) for s, e in windows)
+
+
+def _cap(s: str) -> str:
+    return s[:1].upper() + s[1:]
+
+
+def _who(v: dict) -> str:
+    return f"{v.get('name') or 'an unnamed vessel'} ({PARTY_WORD.get(v.get('vesselType') or '', v.get('vesselType') or 'vessel')}, flag {v.get('flag') or 'unknown'})"
+
+
+def encounters(d: dict, gaps: list[dict]) -> S.EncountersResponse:
+    """Meetings at sea, each cross-checked against intentional AIS gaps of either vessel within 48 hours."""
+    by_vessel = _gaps_by_vessel(gaps)
+    out = []
+    for e in d["events"]:
+        lat, lon = float(e["lat"]), float(e["lon"])
+        t0, t1 = _ts(e.get("start")), _ts(e.get("end"))
+        vessels = [S.EncounterVessel(**v, went_dark=_near(by_vessel.get(v.get("vesselId") or "", []), t0, t1, DARK_LINK_H))
+                   for v in e["vessels"]]
+        dark = any(v.went_dark for v in vessels)
+        a, b = e["vessels"][0], e["vessels"][1]
+        dist = f"{round((e.get('medianDistanceKm') or 0) * 1000):,} m" if e.get("medianDistanceKm") is not None else "close"
+        obs = (f"{_cap(_who(a))} and {_who(b)} stayed about {dist} apart"
+               + (f" at {e['medianSpeedKnots']:.1f} knots" if e.get("medianSpeedKnots") is not None else "")
+               + f" for {_span(e.get('durationHours'))}, from {_day(e.get('start'))}, {_where(lat, lon)}"
+               + (f", {round(e['shoreKm']):,} km from shore." if e.get("shoreKm") is not None else "."))
+        stmts = [_st(OBS, obs)]
+        auth_bits = [f"{v.name or 'One vessel'} {AUTH_SENTENCE[v.authorisation.value]}" for v in vessels
+                     if v.authorisation != S.Authorisation.UNKNOWN]
+        if auth_bits:
+            stmts.append(_st(OBS, "Public registries: " + "; ".join(auth_bits) + "."))
+        if dark:
+            names = ", ".join(v.name or "an unnamed vessel" for v in vessels if v.went_dark)
+            stmts.append(_st(OBS, f"{names} switched AIS off (classed as likely intentional) within {DARK_LINK_H} hours of this meeting."))
+        stmts.append(_st(INF, "Two vessels holding station side by side for hours is how catch, crew or fuel is moved at sea. "
+                              "Global Fishing Watch detects it from AIS; nobody saw a transfer."))
+        if dark and any(v.authorisation == S.Authorisation.NOT_FOUND for v in vessels):
+            stmts.append(_st(HYP, "Possible unreported transshipment: a meeting involving a vessel with no public authorisation on record, "
+                                  "next to AIS being switched off. Also consistent with a declared transfer, a crew change or bad reception."))
+        elif dark:
+            stmts.append(_st(HYP, "Switching AIS off around a meeting is consistent with hiding where the catch went. "
+                                  "It is also consistent with reception gaps far offshore or routine privacy."))
+        else:
+            stmts.append(_st(HYP, "Consistent with a routine, declared transshipment or refuelling; the record alone cannot tell."))
+        stmts.append(_st(REC, "Check the RFMO's transshipment declarations and observer records for these vessels and dates."))
+        out.append(S.Encounter(id=e["id"], lat=lat, lon=lon, start=e.get("start"), end=e.get("end"),
+                               duration_hours=e.get("durationHours"), type=e.get("type"),
+                               median_distance_km=e.get("medianDistanceKm"), median_speed_knots=e.get("medianSpeedKnots"),
+                               potential_risk=bool(e.get("potentialRisk")), shore_km=e.get("shoreKm"), high_seas=bool(e.get("highSeas")),
+                               place=sea_name(lat, lon), rfmo=e.get("rfmo") or [], vessels=vessels, dark_link=dark,
+                               statements=stmts))
+    # strongest leads first: AIS off nearby, then GFW's risk flag, then the longest meetings
+    out.sort(key=lambda x: (not x.dark_link, not x.potential_risk, -(x.duration_hours or 0)))
+    return S.EncountersResponse(is_demo_data=False, fetched_at=d["fetchedAt"], start=d["start"], end=d["end"],
+                                truncated=d["truncated"], total=len(out), events=out)
+
+
+def loitering(d: dict, enc: list[dict]) -> S.LoiteringResponse:
+    """Carriers and bunkers loitering far offshore, each checked for a recorded meeting within 24 hours."""
+    met: dict[str, list] = {}
+    for e in enc:
+        for v in e["vessels"]:
+            if v.get("vesselId"):
+                met.setdefault(v["vesselId"], []).append((_ts(e.get("start")), _ts(e.get("end"))))
+    out = []
+    for e in d["events"]:
+        lat, lon = float(e["lat"]), float(e["lon"])
+        hit = _near(met.get(e.get("vesselId") or "", []), _ts(e.get("start")), _ts(e.get("end")), MEET_LINK_H)
+        who = _who({"name": e.get("vesselName"), "vesselType": e.get("vesselType"), "flag": e.get("flag")})
+        obs = (f"{_cap(who)} drifted or idled for {_span(e.get('durationHours'))}"
+               + (f" at {e['speedKnots']:.1f} knots on average" if e.get("speedKnots") is not None else "")
+               + f", about {round(e.get('shoreKm') or 0):,} km from shore {_where(lat, lon)}, from {_day(e.get('start'))}.")
+        stmts = [_st(OBS, obs)]
+        if hit:
+            stmts.append(_st(OBS, f"It had a recorded encounter with another vessel within {MEET_LINK_H} hours."))
+        stmts += [_st(INF, "Carriers and bunker tankers wait far from port to meet fishing vessels; the wait itself shows on AIS as loitering."),
+                  _st(HYP, "Waiting for a transshipment or refuelling rendezvous" + (", which the recorded encounter supports." if hit else
+                           ". Also consistent with waiting for orders, a berth, or better weather.")),
+                  _st(REC, "Look for fishing vessels nearby that went dark at the same time, and the RFMO's transshipment records.")]
+        out.append(S.Loitering(id=e["id"], lat=lat, lon=lon, start=e.get("start"), end=e.get("end"),
+                               duration_hours=e.get("durationHours"), distance_km=e.get("distanceKm"), speed_knots=e.get("speedKnots"),
+                               shore_km=e.get("shoreKm"), high_seas=bool(e.get("highSeas")), place=sea_name(lat, lon),
+                               vessel_id=e.get("vesselId"), vessel_name=e.get("vesselName"), flag=e.get("flag"),
+                               vessel_type=e.get("vesselType"), met_vessel=hit, statements=stmts))
+    out.sort(key=lambda x: (not x.met_vessel, -(x.duration_hours or 0)))
+    return S.LoiteringResponse(is_demo_data=False, fetched_at=d["fetchedAt"], start=d["start"], end=d["end"],
+                               truncated=d["truncated"], total=len(out), events=out)
+
+
+def _int(x) -> int | None:
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def insights(d: dict) -> S.VesselInsights:
+    r = d["raw"]
+    fish = (r.get("apparentFishing") or {}).get("periodSelectedCounters") or {}
+    gap = (r.get("gap") or {}).get("periodSelectedCounters") or {}
+    iuu = ((r.get("vesselIdentity") or {}).get("iuuVesselList")) or {}
+    cov = (r.get("coverage") or {}).get("percentage")
+    listed_now = bool(iuu.get("totalTimesListedInThePeriod")) or bool(iuu.get("valuesInThePeriod"))
+    times = _int(iuu.get("totalTimesListed")) or 0
+    no_auth, no_take = _int(fish.get("eventsInRFMOWithoutKnownAuthorization")), _int(fish.get("eventsInNoTakeMPAs"))
+    stmts = []
+    if listed_now:
+        stmts.append(_st(OBS, "This vessel is on an RFMO illegal, unreported and unregulated (IUU) vessel list in this period."))
+    elif times:
+        stmts.append(_st(OBS, f"This vessel has appeared on an RFMO IUU vessel list {times} time(s), though not in this period."))
+    else:
+        stmts.append(_st(OBS, "This vessel does not appear on any RFMO IUU vessel list."))
+    if fish.get("events") is not None:
+        stmts.append(_st(OBS, f"{_int(fish.get('events'))} apparent-fishing events in the period: {no_auth or 0} inside an RFMO area where "
+                              f"no public authorisation for it was found, {no_take or 0} inside a no-take protected area."))
+    if no_auth:
+        stmts.append(_st(INF, "Missing from public authorisation lists is not proof of fishing without a licence: lists are incomplete "
+                              "and some fisheries do not publish them."))
+    if cov is not None and cov < 50:
+        stmts.append(_st(INF, f"AIS positions cover only {round(cov)}% of the period, so much of what it did is not on record."))
+    if listed_now or no_auth or no_take:
+        stmts.append(_st(REC, "Ask the flag state and the RFMO for the vessel's licences for these areas and dates."))
+    return S.VesselInsights(is_demo_data=False, fetched_at=d["fetchedAt"], vessel_id=d["vesselId"], start=d["start"], end=d["end"],
+                            iuu_listed_in_period=listed_now, iuu_times_listed=times, fishing_events=_int(fish.get("events")),
+                            fishing_in_rfmo_without_known_authorisation=no_auth, fishing_in_no_take_mpas=no_take,
+                            ais_off_events=_int(gap.get("events")), coverage_pct=round(cov, 1) if cov is not None else None,
+                            statements=stmts)
+
+
+_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _md(mmdd: str) -> str:
+    m, dd = map(int, mmdd.split("-"))
+    return f"{dd} {_MON[m - 1]}"
+
+
+def closures(d: dict) -> S.ClosuresResponse:
+    out = []
+    for c in d["closures"]:
+        seasons = []
+        for s in c["seasons"]:
+            r = s.get("ratio")
+            obs = (f"AIS-broadcasting vessels logged {round(s['hoursDuring']):,} hours of apparent fishing in the waters covered by the {c['name']} "
+                   f"during the ban ({_day(s['start'])} to {_day(s['end'])}), against {round(s['hoursBefore']):,} hours in the "
+                   f"{s['days']} days before and {round(s['hoursAfter']):,} hours in the {s['days']} days after.")
+            stmts = [_st(OBS, obs)]
+            if r is not None:
+                drop = round((1 - r) * 100)
+                stmts.append(_st(INF, f"Fishing during the ban was {drop}% below the surrounding weeks." if drop > 0 else
+                                      f"Fishing during the ban was not lower than the surrounding weeks ({round(r * 100)}% of their level)."))
+                stmts.append(_st(INF, "Weather and fish migration also change effort between seasons (the monsoon keeps many boats in "
+                                      "port), so the difference is not all the ban's doing."))
+            if s["hoursDuring"] > 0:
+                stmts.append(_st(HYP, "The remaining effort may be exempt vessels (traditional craft, territorial waters, licensed fleets), "
+                                      "transit misread as fishing, or fishing in breach of the ban."))
+                stmts.append(_st(REC, "Compare the busiest cells with the fisheries department's exemptions and patrol records."))
+            seasons.append(S.ClosureSeason(id=f"{c['id']}-{s['year']}", **{k: v for k, v in s.items() if k != "cells"},
+                                           cells=[S.ClosureCell(**x) for x in s["cells"]], statements=stmts))
+        out.append(S.Closure(id=c["id"], country=c["country"], name=c["name"], eez=c["eez"],
+                             window=f"{_md(c['from'])} to {_md(c['to'])}", scope=c["scope"],
+                             confidence=S.ConfidenceLevel(c["confidence"]), sources=c["sources"], seasons=seasons))
+    return S.ClosuresResponse(is_demo_data=False, fetched_at=d["fetchedAt"], closures=out)

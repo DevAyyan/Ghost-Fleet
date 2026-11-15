@@ -156,7 +156,9 @@ backend/                     Python 3.11+ / FastAPI
   tests/                     63 pytest tests
   scripts/
     ingest_real.py           Build data/processed/panel_real.json (GFW + Earth Search + NASA POWER)
+    build_scan.py            Precompute the trend scan -> data/processed/scan_real.json.gz
     ingest_sea.py            Build data/processed/protected_fishing.json (apparent fishing in MPAs)
+    ingest_closures.py       Build data/processed/closures.json (fishing during seasonal bans)
     fetch_s1_footprints.py   Sentinel-1 footprint helper
     fetch_open_data.sh       Older regional (20-26N, 56-70E) fetch of open NASA/NOAA grids
     probe_gfw.py             Check what the GFW token can query
@@ -201,8 +203,14 @@ The repository already contains a snapshot, so you can skip this step to run the
 # Rebuild the global trend panel (cached under backend/data/raw/; --refresh-all ignores caches)
 python3 -I backend/scripts/ingest_real.py [--start 2020-01] [--min-detections 150] [--skip-wind]
 
+# Precompute the trend scan so the API (and every serverless cold start) skips it; commit the output
+python3 backend/scripts/build_scan.py
+
 # Precompute apparent fishing inside marine protected areas (about 3 min per day scanned)
 python3 -I backend/scripts/ingest_sea.py --days 3
+
+# Fishing during seasonal bans (re-check the ban dates in the script each season)
+python3 backend/scripts/ingest_closures.py
 ```
 
 ### 3. Run the API (<http://localhost:8000>)

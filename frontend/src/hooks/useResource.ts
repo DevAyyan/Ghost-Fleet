@@ -12,6 +12,10 @@ const cache = new Map<string, unknown>();
 /**
  * Minimal server-state hook: cached by key, ignores stale responses, exposes refetch.
  * Pass key = null to stay idle (e.g. nothing selected yet).
+ *
+ * Every load (including a cache hit or going idle) starts a new generation, so a slower response for an earlier key
+ * can never overwrite the current one. Data is only carried over while refetching the same key: a new key (e.g. a new
+ * period) never shows the previous key's records under its own label.
  */
 export function useResource<T>(key: string | null, fetcher: () => Promise<T>) {
   const [state, setState] = useState<Resource<T>>(() =>
@@ -21,6 +25,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>) {
   const seq = useRef(0);
 
   const load = useCallback((force = false) => {
+    const id = ++seq.current;
     if (!key) {
       setState({ status: "idle" });
       return;
@@ -29,8 +34,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>) {
       setState({ status: "success", data: cache.get(key) as T });
       return;
     }
-    const id = ++seq.current;
-    setState((s) => ({ status: "loading", data: s.data }));
+    setState((s) => ({ status: "loading", data: force ? s.data : undefined }));
     fetcherRef.current().then(
       (data) => {
         cache.set(key, data);

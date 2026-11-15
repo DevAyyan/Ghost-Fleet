@@ -39,8 +39,12 @@ def _ais_reception(d: dict, cells: list[dict], T: int) -> np.ndarray:
     return np.tile(_arr([d["aisReceptionRegional"]], T), (len(cells), 1))
 
 
+def panel_path(path: str | os.PathLike | None = None) -> Path:
+    return Path(path or os.getenv("GHOSTFLEET_PANEL", DEFAULT_PATH))
+
+
 def load_real_panel(path: str | os.PathLike | None = None) -> tuple[Panel, RealExtras]:
-    p = Path(path or os.getenv("GHOSTFLEET_PANEL", DEFAULT_PATH))
+    p = panel_path(path)
     if not p.exists():
         raise DataUnavailable(f"Real data panel not found at {p}. Run: python3 -I backend/scripts/ingest_real.py")
     try:

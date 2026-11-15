@@ -1,15 +1,43 @@
 import type { ReactNode } from "react";
-import type { AisOffEvent, AisOffHotspot, CoordinatedTurnOn, OilSlick, ProtectedFishingEvent, Statement } from "../api/types";
+import type {
+  AisOffEvent, AisOffHotspot, Authorisation, Closure, ClosureSeason, CoordinatedTurnOn, Encounter, Loitering, OilSlick,
+  ProtectedFishingEvent, Statement,
+} from "../api/types";
 import { formatDateTime, formatDay, formatSpan, vesselWord } from "../lib/format";
+import type { Period } from "../lib/layers";
 import { DrawerFrame } from "./DrawerFrame";
+import { InsightsPanel } from "./InsightsPanel";
+import { SlickCandidates } from "./SlickCandidates";
 import { Section, StatementRow } from "./ui";
+
+/** One year of one seasonal ban, with where it is drawn (its busiest fishing spot). */
+export type ClosureRecord = ClosureSeason & { closure: Closure; lat: number; lon: number };
+
+export function closureRecord(closures: Closure[] | undefined, id: string): ClosureRecord | null {
+  for (const c of closures ?? []) {
+    const s = c.seasons.find((x) => x.id === id);
+    if (s) {
+      const top = s.cells[0];
+      return { ...s, closure: c, lat: top?.lat ?? 0, lon: top?.lon ?? 0 };
+    }
+  }
+  return null;
+}
+
+export const AUTH_WORD: Record<Authorisation, string> = {
+  AUTHORISED: "publicly licensed", PARTLY: "partly licensed", NOT_FOUND: "no public licence on record", UNKNOWN: "licence unknown",
+};
+const PARTY: Record<string, string> = { carrier: "Refrigerated carrier", bunker: "Bunker tanker", support: "Support vessel", tanker: "Tanker", fishing: "Fishing vessel" };
 
 export type SeaRecord =
   | { kind: "aisOff"; record: AisOffEvent }
   | { kind: "hotspot"; record: AisOffHotspot }
   | { kind: "turnOn"; record: CoordinatedTurnOn }
   | { kind: "slick"; record: OilSlick }
-  | { kind: "fishing"; record: ProtectedFishingEvent };
+  | { kind: "fishing"; record: ProtectedFishingEvent }
+  | { kind: "encounter"; record: Encounter }
+  | { kind: "loitering"; record: Loitering }
+  | { kind: "closure"; record: ClosureRecord };
 
 const coords = (lat: number, lon: number) =>
   `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"} ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}`;
@@ -20,6 +48,9 @@ const SOURCE_NOTE = {
   turnOn: "Global Fishing Watch AIS gap events. Detected by joint dark operational analysis: vessels that turned off AIS on entering the area, operated dark together inside, and restored AIS upon exiting.",
   slick: "SkyTruth Cerulean, a machine-learning model run on Sentinel-1 radar.",
   fishing: "Global Fishing Watch apparent-fishing events tagged inside a no-take marine protected area.",
+  encounter: "Global Fishing Watch encounter events, AIS gap events and public RFMO authorisation lists.",
+  loitering: "Global Fishing Watch loitering events (carriers and bunker tankers, 20+ nautical miles from shore).",
+  closure: "Global Fishing Watch apparent fishing effort (AIS) in the country's EEZ; ban dates from the notices below.",
 } as const;
 
 function facts(item: SeaRecord): [string, ReactNode][] {
@@ -62,6 +93,30 @@ function facts(item: SeaRecord): [string, ReactNode][] {
         ["Lasted", formatSpan(f.durationHours)], ["From shore", km(f.shoreKm)], ["Where", `${f.place}, ${coords(f.lat, f.lon)}`],
         ["Area type", f.fullNoTake ? "No-take marine protected area" : "Protected area that is partly no-take"]];
     }
+    case "encounter": {
+      const e = item.record;
+      return [["Met on", formatDateTime(e.start)], ["Lasted", formatSpan(e.durationHours)],
+        ["Apart", e.medianDistanceKm == null ? "unknown" : `about ${Math.round(e.medianDistanceKm * 1000).toLocaleString()} m`],
+        ["Speed", e.medianSpeedKnots == null ? "unknown" : `${e.medianSpeedKnots.toFixed(1)} knots`],
+        ["From shore", km(e.shoreKm)], ["Where", `${e.place}, ${coords(e.lat, e.lon)}${e.highSeas ? ", high seas" : ""}`],
+        ["Fisheries bodies", e.rfmo.join(", ") || "none"],
+        ["GFW risk flag", e.potentialRisk ? "Yes: a vessel lacks a matching public authorisation" : "No"]];
+    }
+    case "loitering": {
+      const l = item.record;
+      return [["Vessel", `${vesselWord(l.vesselType)}, flag ${l.flag ?? "unknown"}`], ["Started", formatDateTime(l.start)],
+        ["Lasted", formatSpan(l.durationHours)], ["Average speed", l.speedKnots == null ? "unknown" : `${l.speedKnots.toFixed(1)} knots`],
+        ["From shore", km(l.shoreKm)], ["Where", `${l.place}, ${coords(l.lat, l.lon)}${l.highSeas ? ", high seas" : ""}`],
+        ["Met a vessel", l.metVessel ? "Yes, within 24 hours" : "No recorded encounter"]];
+    }
+    case "closure": {
+      const s = item.record, c = s.closure;
+      const h = (v: number) => `${Math.round(v).toLocaleString()} hours`;
+      return [["Ban", `${formatDay(s.start)} to ${formatDay(s.end)} (${s.days} days)`], ["Applies to", c.scope],
+        ["Fishing during", h(s.hoursDuring)], [`${s.days} days before`, h(s.hoursBefore)], [`${s.days} days after`, h(s.hoursAfter)],
+        ["Spots fished during", `${s.cellsDuring.toLocaleString()} (0.1° squares)`], ["Busiest", s.cells[0] ? coords(s.cells[0].lat, s.cells[0].lon) : "none"],
+        ["Rule confidence", c.confidence.charAt(0) + c.confidence.slice(1).toLowerCase()]];
+    }
   }
 }
 
@@ -72,11 +127,17 @@ function title(item: SeaRecord): string {
     case "turnOn": return `Joint dark operation: ${item.record.place} (${item.record.count} vessels)`;
     case "slick": return `Possible oil slick, ${item.record.place}`;
     case "fishing": return `${item.record.vesselName ?? "Unnamed vessel"}: apparent fishing in a no-take area`;
+    case "encounter": return `Meeting at sea: ${item.record.vessels.map((v) => v.name ?? "unnamed").join(" and ")}`;
+    case "loitering": return `${item.record.vesselName ?? "Unnamed vessel"} waiting offshore`;
+    case "closure": return `${item.record.closure.name}, ${item.record.year}`;
   }
 }
 
-export function SeaDrawer({ item, onClose, onOpenVessel }: { item: SeaRecord; onClose: () => void; onOpenVessel: (vesselId: string) => void }) {
-  const vesselId = item.kind === "aisOff" || item.kind === "fishing" ? item.record.vesselId : null;
+export function SeaDrawer({ item, onClose, onOpenVessel, period, onOpenSlickSource, candidatesAvailable }: {
+  item: SeaRecord; onClose: () => void; onOpenVessel: (vesselId: string) => void; period: Period;
+  onOpenSlickSource?: (vesselId: string, slick: OilSlick, rank: number) => void; candidatesAvailable?: boolean;
+}) {
+  const vesselId = item.kind === "aisOff" || item.kind === "fishing" || item.kind === "loitering" ? item.record.vesselId : null;
   const statements: Statement[] = item.record.statements;
   const seen = statements.filter((s) => s.label === "OBSERVATION" || s.label === "INFERENCE");
   const might = statements.filter((s) => s.label === "HYPOTHESIS");
@@ -94,6 +155,46 @@ export function SeaDrawer({ item, onClose, onOpenVessel }: { item: SeaRecord; on
           </div>
         )}
       </Section>
+      {item.kind === "slick" && (
+        <Section title="Which ship may have caused it"
+          hint="Cerulean ranks ships whose AIS track crossed the slick near the time of the radar image, and structures beside it, by how well they fit the slick's shape. A candidate is a lead to check, never proof of who released the oil.">
+          <SlickCandidates slick={item.record} available={candidatesAvailable}
+            onOpenVessel={(id, c) => (onOpenSlickSource ? onOpenSlickSource(id, item.record, c.rank) : onOpenVessel(id))} />
+        </Section>
+      )}
+      {item.kind === "fishing" && vesselId && (
+        <Section title="Licences and blacklists" hint="Whether this vessel is on a fisheries body's IUU list, and how often it fished where no public licence for it was found, in the chosen period.">
+          <InsightsPanel vesselId={vesselId} period={period} />
+        </Section>
+      )}
+      {item.kind === "encounter" && (
+        <Section title="The two vessels" hint="Licence status is from public RFMO authorisation lists, which are incomplete. Open a vessel for its path and blacklist checks.">
+          <ul className="feed">
+            {item.record.vessels.map((v, i) => (
+              <li key={v.vesselId ?? i}>
+                <button type="button" className="feed-btn" disabled={!v.vesselId} onClick={() => v.vesselId && onOpenVessel(v.vesselId)}>
+                  <span className="feed-title">{v.name ?? "Unnamed vessel"}</span>
+                  <span className="feed-meta">
+                    {PARTY[v.vesselType ?? ""] ?? "Vessel"}, flag {v.flag ?? "unknown"}. {AUTH_WORD[v.authorisation]}.
+                    {v.wentDark ? " Switched AIS off within 48 hours." : ""}{v.vesselId ? " Open track →" : ""}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {item.kind === "closure" && (
+        <Section title="Where vessels fished during the ban" hint="The busiest 0.1° squares, by apparent fishing hours from AIS. Exempt vessels cannot be told apart here.">
+          <ol className="feed">
+            {item.record.cells.slice(0, 12).map((c) => (
+              <li key={`${c.lat},${c.lon}`} className="feed-more">
+                <span className="num">{coords(c.lat, c.lon)}</span>: {Math.round(c.hours).toLocaleString()} hours, {c.vessels} vessel(s)
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
       {item.kind === "turnOn" && (
         <Section title={`Vessels in this joint operation (${item.record.count})`}
           hint="Each vessel turned off AIS while entering, operated dark inside with the others, and turned AIS on while exiting. Click to inspect full track.">
@@ -123,10 +224,12 @@ export function SeaDrawer({ item, onClose, onOpenVessel }: { item: SeaRecord; on
           </ul>
         </Section>
       )}
-      <Section title="What might have happened"
-        hint="These are possibilities drawn from the context: the kind of vessel, protected areas, distance from shore and known high-risk waters. None is a finding.">
-        {might.map((s) => <StatementRow key={s.text} statement={s} />)}
-      </Section>
+      {might.length > 0 && (
+        <Section title="What might have happened"
+          hint="These are possibilities drawn from the context: the kind of vessel, protected areas, distance from shore and known high-risk waters. None is a finding.">
+          {might.map((s) => <StatementRow key={s.text} statement={s} />)}
+        </Section>
+      )}
       {next.length > 0 && (
         <Section title="Next step">{next.map((s) => <StatementRow key={s.text} statement={s} />)}</Section>
       )}
@@ -134,6 +237,9 @@ export function SeaDrawer({ item, onClose, onOpenVessel }: { item: SeaRecord; on
         <p className="muted">{SOURCE_NOTE[item.kind]}</p>
         {item.kind === "slick" && item.record.url && (
           <p><a href={item.record.url} target="_blank" rel="noreferrer">Open the radar image of this slick on Cerulean</a></p>
+        )}
+        {item.kind === "closure" && (
+          <ul>{item.record.closure.sources.map((u) => <li key={u}><a href={u} target="_blank" rel="noreferrer">{new URL(u).hostname}</a></li>)}</ul>
         )}
         <p className="muted">A lead to check, never by itself evidence of wrongdoing.</p>
       </Section>

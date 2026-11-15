@@ -261,3 +261,17 @@ def test_app_works_without_the_startup_hook(monkeypatch):
     assert c.get("/api/meta").json()["eventCount"] >= 0 and c.get("/api/events").status_code == 200
     assert len(calls) == 1
     assert isinstance(main.sea_watch(type("R", (), {"app": app})()), main.SeaWatch)
+
+
+def test_coordinated_turn_ons_tolerate_a_missing_shore_distance():
+    # slim_gap stores shoreKm=None when GFW has no distance: the border-zone rule must not crash on it
+    base = {"vesselType": "cargo", "start": "2026-11-04T12:00:00Z", "end": "2026-11-05T12:00:00Z", "durationHours": 24.0}
+    evs = [
+        {**base, "id": "a", "vesselName": "A", "flag": "PAN", "lat": 9.8, "lon": 19.8, "onLat": 10.0, "onLon": 20.0,
+         "highSeas": True, "shoreKm": None},
+        {**base, "id": "b", "vesselName": "B", "flag": "LBR", "lat": 9.9, "lon": 19.9, "onLat": 10.1, "onLon": 20.1,
+         "highSeas": False, "shoreKm": 120.0},
+    ]
+    clusters = sea_service.coordinated_turn_ons(evs, "in Nov 2026")
+    assert len(clusters) == 1
+    assert any("Border zone" in s.text for s in clusters[0].statements)

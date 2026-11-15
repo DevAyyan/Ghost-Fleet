@@ -28,12 +28,14 @@ frontend/src/               React 19 + TypeScript + Vite 8 + MapLibre GL 4.7
   components/MapView.tsx    MapLibre map: bathymetric ocean basemap, hull polygons, badges, track pathing
 backend/scripts/
   ingest_real.py            Ingests live global SAR and environmental data -> panel_real.json
+  build_scan.py             Precomputes the trend scan -> scan_real.json.gz (keyed to the panel's SHA-256)
   ingest_sea.py             Ingests apparent fishing events inside no-take MPAs -> protected_fishing.json
+  ingest_closures.py        Fishing effort during seasonal bans (India, Bangladesh, Pakistan) -> closures.json
 ```
 
 ## Essential Commands
 ```bash
-# Backend pytest suite (61 tests)
+# Backend pytest suite (73 tests)
 cd backend && pytest
 
 # Run backend API server
