@@ -20,7 +20,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..gfw import ON_VERCEL, GFWError, GFWLive, month_axis
+from ..gfw import ON_VERCEL, UPSTREAM_BUDGET_S, BudgetExceeded, GFWError, GFWLive, month_axis, parallel, upstream_budget
 from ..analytics.scan_io import cache_path, load_scan, panel_digest
 from ..real import DataUnavailable, load_real_panel, panel_path
 from ..sea import CONTEXT_LAYERS, MAX_SPAN_DAYS, LayerNotBuilt, SeaWatch, default_period
@@ -132,6 +132,12 @@ async def _unavailable(_: Request, exc: DataUnavailable):
     return _err(503, "DATA_UNAVAILABLE", str(exc))
 
 
+@app.exception_handler(BudgetExceeded)
+async def _too_slow(_: Request, exc: BudgetExceeded):
+    return _err(504, "UPSTREAM_TIMEOUT", f"The data sources were too slow to answer ({exc}). Try again in a minute: "
+                "whatever was fetched in the meantime is kept, so a retry is quicker.")
+
+
 @app.exception_handler(GFWError)
 async def _gfw_down(_: Request, exc: GFWError):
     return _err(502, "UPSTREAM_UNAVAILABLE", f"Global Fishing Watch: {exc}")
@@ -216,7 +222,8 @@ def get_detections(request: Request, month: str | None = Query(None, pattern=r"^
     m = month or months[-1]
     if m not in months:
         raise NotFound("Month", m)
-    d = gfw_live(request).detections(m)
+    with upstream_budget(DETECTIONS_BUDGET_S):
+        d = gfw_live(request).detections(m)
     rows = [(p[0], p[1], int(p[2]), int(p[3])) for p in d["points"]]
     totals = {"total_unmatched": sum(r[2] for r in rows), "total_matched": sum(r[3] for r in rows)}
     if compact:
@@ -227,6 +234,9 @@ def get_detections(request: Request, month: str | None = Query(None, pattern=r"^
 
 # ---------- live awareness layers (free sources; see ghostfleet/sea.py) ----------
 DAY = r"^\d{4}-\d{2}-\d{2}$"
+# Every handler that calls upstream runs inside upstream_budget(): all its upstream calls together get UPSTREAM_BUDGET_S
+# (40 s), well inside Vercel's 60 s maxDuration. The two worldwide SAR reports of /api/detections are slower, so they get more.
+DETECTIONS_BUDGET_S = max(UPSTREAM_BUDGET_S, 50.0)
 
 
 class BadPeriod(ValueError):
@@ -254,48 +264,64 @@ def period(start: str | None, end: str | None) -> tuple[str, str]:
     return start, end
 
 
+def _compact(resp, compact: bool, records: str = "events"):
+    """`?compact=true` on a list endpoint: each distinct statement once per response (see sea_service.pool_statements)."""
+    return sea_service.pool_statements(resp, records) if compact else resp
+
+
 @app.exception_handler(BadPeriod)
 async def _bad_period(_: Request, exc: BadPeriod):
     return _err(422, "VALIDATION_ERROR", str(exc))
 
 
 @app.get("/api/sea/ais-off", response_model=S.AisOffResponse)
-def get_ais_off(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
+def get_ais_off(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY),
+                compact: bool = Query(False, description="Send each distinct statement once (statementTable + statementIds)")):
     """Vessels that switched AIS off in a period (default: the last 30 days), where it happened most, and labelled hypotheses."""
-    return sea_service.ais_off(sea_watch(request).ais_off(*period(start, end)))
+    with upstream_budget():
+        d = sea_watch(request).ais_off(*period(start, end))
+    return _compact(sea_service.ais_off(d), compact)
 
 
 @app.get("/api/sea/slicks", response_model=S.SlicksResponse)
-def get_slicks(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
+def get_slicks(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY),
+               compact: bool = Query(False, description="Send each distinct statement once (statementTable + statementIds)")):
     """Largest possible oil slicks in a period (default: the last 30 days), machine-detected on Sentinel-1 radar (SkyTruth Cerulean),
     each with Cerulean's ranked candidate sources, cross-checked against AIS switched off within 48 hours."""
     sw, (s, e) = sea_watch(request), period(start, end)
-    try:
-        gaps = sw.ais_off(s, e)["events"]
-    except GFWError:
-        gaps = []        # the slicks still load; candidates just are not cross-checked against AIS switch-offs
-    return sea_service.slicks(sw.slicks(s, e), gaps)
+
+    def gaps():
+        try:
+            return sw.ais_off(s, e)["events"]
+        except GFWError:
+            return []    # the slicks still load; candidates just are not cross-checked against AIS switch-offs
+    with upstream_budget():
+        sl, gp = parallel(lambda: sw.slicks(s, e), gaps)
+    return _compact(sea_service.slicks(sl, gp), compact, "slicks")
 
 
 @app.get("/api/sea/protected-fishing", response_model=S.ProtectedFishingResponse)
-def get_protected_fishing(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
+def get_protected_fishing(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY),
+                          compact: bool = Query(False, description="Send each distinct statement once (statementTable + statementIds)")):
     """Apparent fishing inside no-take protected areas in a period. Built by backend/scripts/ingest_sea.py; 503 until that has run."""
     s, e = period(start, end) if (start or end) else (None, None)
-    return sea_service.protected_fishing(sea_watch(request).protected_fishing(), s, e)
+    return _compact(sea_service.protected_fishing(sea_watch(request).protected_fishing(), s, e), compact)
 
 
 @app.get("/api/sea/vessels/search", response_model=S.VesselSearchResponse)
 def search_vessels(request: Request, q: str = Query(..., min_length=3, max_length=60)):
     """Find a ship by name, MMSI, IMO or call sign (Global Fishing Watch vessel identity)."""
-    return S.VesselSearchResponse(is_demo_data=False, query=q,
-                                  results=[sea_service.identity(i) for i in sea_watch(request).search(q.strip())])
+    with upstream_budget():
+        found = sea_watch(request).search(q.strip())
+    return S.VesselSearchResponse(is_demo_data=False, query=q, results=[sea_service.identity(i) for i in found])
 
 
 @app.get("/api/sea/vessels/{vessel_id}", response_model=S.VesselResponse)
 def get_vessel(vessel_id: str, request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
     """One ship in a period: its path through its recorded events, and where and when it stopped broadcasting."""
     try:
-        return sea_service.vessel(sea_watch(request).vessel(vessel_id, *period(start, end)))
+        with upstream_budget():
+            return sea_service.vessel(sea_watch(request).vessel(vessel_id, *period(start, end)))
     except LookupError:
         raise NotFound("Vessel", vessel_id) from None
 
@@ -307,23 +333,31 @@ def get_lane_tile(z: int, x: int, y: int, request: Request, month: str | None = 
         raise NotFound("Tile", f"{z}/{x}/{y}")
     if month and month not in month_axis():
         raise NotFound("Month", month)
-    return Response(sea_watch(request).lanes_tile(z, x, y, month), media_type="image/png",
+    with upstream_budget():
+        png = sea_watch(request).lanes_tile(z, x, y, month)
+    return Response(png, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})   # a month's lanes never change
 
 
 @app.get("/api/sea/encounters", response_model=S.EncountersResponse)
-def get_encounters(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
+def get_encounters(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY),
+                   compact: bool = Query(False, description="Send each distinct statement once (statementTable + statementIds)")):
     """Fishing vessels meeting carriers, bunkers, support vessels or tankers at sea (possible transshipment) in a period,
     each checked for AIS switched off by either vessel within 48 hours. Strongest leads first."""
     sw, (s, e) = sea_watch(request), period(start, end)
-    return sea_service.encounters(sw.encounters(s, e), sw.ais_off(s, e)["events"])
+    with upstream_budget():
+        enc, gaps = parallel(lambda: sw.encounters(s, e), lambda: sw.ais_off(s, e))
+    return _compact(sea_service.encounters(enc, gaps["events"]), compact)
 
 
 @app.get("/api/sea/loitering", response_model=S.LoiteringResponse)
-def get_loitering(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY)):
+def get_loitering(request: Request, start: str | None = Query(None, pattern=DAY), end: str | None = Query(None, pattern=DAY),
+                  compact: bool = Query(False, description="Send each distinct statement once (statementTable + statementIds)")):
     """Carriers and bunker tankers loitering 20+ nautical miles offshore in a period, each checked for a recorded meeting."""
     sw, (s, e) = sea_watch(request), period(start, end)
-    return sea_service.loitering(sw.loitering(s, e), sw.encounters(s, e)["events"])
+    with upstream_budget():
+        lo, enc = parallel(lambda: sw.loitering(s, e), lambda: sw.encounters(s, e))
+    return _compact(sea_service.loitering(lo, enc["events"]), compact)
 
 
 @app.get("/api/sea/vessels/{vessel_id}/insights", response_model=S.VesselInsights)
@@ -331,7 +365,8 @@ def get_vessel_insights(vessel_id: str, request: Request, start: str | None = Qu
                         end: str | None = Query(None, pattern=DAY)):
     """IUU-list history, fishing without a known public authorisation, no-take MPA fishing and AIS-off counts for one ship."""
     try:
-        return sea_service.insights(sea_watch(request).insights(vessel_id, *period(start, end)))
+        with upstream_budget():
+            return sea_service.insights(sea_watch(request).insights(vessel_id, *period(start, end)))
     except LookupError:
         raise NotFound("Vessel", vessel_id) from None
 
@@ -344,10 +379,12 @@ def get_closures(request: Request):
 
 @app.get("/api/sea/context/{layer}/{z}/{x}/{y}.pbf", responses={200: {"content": {"application/x-protobuf": {}}}})
 def get_context_tile(layer: str, z: int, x: int, y: int, request: Request):
-    """Vector tile of sea borders (`eez`, Marine Regions EEZs) or offshore platforms (`infra`), proxied from Global Fishing Watch."""
+    """Vector tile of sea borders (`eez`, Marine Regions EEZs), offshore platforms (`infra`) or marine protected areas
+    (`mpa`, WDPA), proxied from Global Fishing Watch."""
     if layer not in CONTEXT_LAYERS or not (0 <= z <= 9 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
         raise NotFound("Tile", f"{layer}/{z}/{x}/{y}")
-    pbf = sea_watch(request).context_tile(layer, z, x, y)
+    with upstream_budget():
+        pbf = sea_watch(request).context_tile(layer, z, x, y)
     if not pbf:
         return Response(status_code=204, headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000"})
     return Response(pbf, media_type="application/x-protobuf",
@@ -361,7 +398,9 @@ def get_effort_tile(z: int, x: int, y: int, request: Request, start: str | None 
     if not (0 <= z <= 6 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
         raise NotFound("Tile", f"{z}/{x}/{y}")
     s, e = period(start, end)
-    return Response(sea_watch(request).effort_tile(z, x, y, s, e), media_type="image/png",
+    with upstream_budget():
+        png = sea_watch(request).effort_tile(z, x, y, s, e)
+    return Response(png, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=3600, s-maxage=86400"})
 
 

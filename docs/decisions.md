@@ -92,5 +92,21 @@ Newest last. Each entry: what we decided, why, and what would change it.
       - Groups vessels entering the same perimeter ($\le 2.2^\circ$), operating dark concurrently inside the area ($\min t_{\text{end}} - \max t_{\text{start}} \ge 30\text{ min}$), and restoring AIS transmissions in unison upon exiting ($\le 2.2^\circ$ within 24 hours).
       - Outputs the exact UTC dates and times down to the minute for entry, exit, and the concurrent unmonitored window across both `OBSERVATION` and `INFERENCE` statements, drawer cards, rail items, and map tooltips.
       - Uses a temporally sorted and windowed graph builder that executes across 13,000+ gap events in $< 0.4\text{ seconds}$.
-
-
+18. **Faster cold loads on Vercel** (2026-11-15). Measured cold, from Karachi: slicks 13.6 s, loitering 11.1 s, encounters 7.3 s.
+    Almost all of it was upstream calls made one after another; building the responses takes 0.1 s.
+    - **Independent fetches run at once** (`gfw.parallel`): an endpoint's sources (slicks + AIS-off, encounters + AIS-off,
+      loitering + encounters), Cerulean's candidate batches, a ship's identity + its first events page, and GFW event
+      pages in waves (offsets step by the page size, so page 2's offset is known before page 1 arrives). After: loitering
+      1.6 s, encounters 1.7 s, slicks 5-7 s (now bound by Cerulean's own 2-3 s per query).
+    - **A time budget per request** (`gfw.upstream_budget`, 40 s; detections 50 s): per-call timeouts are cut to what is
+      left, retries pause only when the budget allows, never after the last try. An exhausted budget serves a stale copy
+      or answers 504 `UPSTREAM_TIMEOUT`, instead of Vercel killing the function at 60 s.
+    - **Optional shared cache** (`ghostfleet/shared_cache.py`, Upstash Redis over REST, off unless configured): each
+      instance's /tmp cache dies with it; the shared one means an upstream answer is fetched once for every instance.
+      Kept 7 days (90 once the period has settled) so it can also stand in when upstream is down.
+    - **Compact lists** (`?compact=true`): each distinct statement once per response. Opt-in, so the default contract
+      is unchanged.
+    - **CDN kept warm** by `.github/workflows/warm-cdn.yml` every 30 minutes, on the exact default URLs.
+    - **Region left at Vercel's default (iad1, Washington).** Both upstreams are in the US (GFW behind Cloudflare,
+      Cerulean on Google Cloud), and a request makes several MB-sized upstream calls but only one hop back to the
+      visitor's nearest CDN edge. Moving the function to Mumbai would put every upstream call across the ocean.

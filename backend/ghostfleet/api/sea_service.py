@@ -24,6 +24,29 @@ def _st(label, text) -> S.Statement:
     return S.Statement(label=label, text=text)
 
 
+def pool_statements(resp, records: str = "events"):
+    """?compact=true: send each distinct statement once per response. Most of a list's text is the same few explanatory
+    sentences repeated on every record; each record then carries only indices into `statement_table`, in order."""
+    table: list[S.Statement] = []
+    index: dict[tuple, int] = {}
+    for rec in getattr(resp, records):
+        ids = []
+        for st in rec.statements:
+            key = (st.label, st.text)
+            if key not in index:
+                index[key] = len(table)
+                table.append(st)
+            ids.append(index[key])
+        rec.statement_ids, rec.statements = ids, []
+    resp.statement_table = table
+    return resp
+
+
+def _r(x, digits: int = 1):
+    """GFW gives distances, speeds and durations to 13 decimals; a lead needs one or two."""
+    return None if x is None else round(float(x), digits)
+
+
 def _where(lat: float, lon: float) -> str:
     name = sea_name(lat, lon)
     if name.startswith("open"):
@@ -129,7 +152,8 @@ def ais_off_event(e: dict) -> S.AisOffEvent:
                          flag=e.get("flag"), vessel_type=vt, shore_km=e.get("shoreKm"), place=sea_name(lat, lon),
                          in_protected_area=bool(e.get("inMpa")), in_no_take=bool(e.get("inNoTake")),
                          high_seas=bool(e.get("highSeas")), statements=stmts, vessel_id=e.get("vesselId"), mmsi=e.get("mmsi"),
-                         on_lat=e.get("onLat"), on_lon=e.get("onLon"), likely_intentional=bool(intentional))
+                         on_lat=e.get("onLat"), on_lon=e.get("onLon"), likely_intentional=bool(intentional),
+                         no_take_area_ids=e.get("noTakeIds") or [], part_no_take_area_ids=e.get("partNoTakeIds") or [])
 
 
 def _span_days(start: str, end: str) -> int:
@@ -482,7 +506,7 @@ def protected_fishing(d: dict, start: str | None = None, end: str | None = None)
                                            duration_hours=e.get("durationHours"), vessel_name=e.get("vesselName"), flag=e.get("flag"),
                                            vessel_type=e.get("vesselType"), shore_km=e.get("shoreKm"),
                                            full_no_take=bool(e.get("fullNoTake")), place=sea_name(lat, lon), statements=stmts,
-                                           vessel_id=e.get("vesselId")))
+                                           vessel_id=e.get("vesselId"), area_ids=e.get("areaIds") or []))
     return S.ProtectedFishingResponse(is_demo_data=False, fetched_at=d["fetchedAt"], days=d["days"], scanned=d["scanned"], events=out,
                                       start=start, end=end)
 
@@ -613,9 +637,9 @@ def encounters(d: dict, gaps: list[dict]) -> S.EncountersResponse:
             stmts.append(_st(HYP, "Consistent with a routine, declared transshipment or refuelling; the record alone cannot tell."))
         stmts.append(_st(REC, "Check the RFMO's transshipment declarations and observer records for these vessels and dates."))
         out.append(S.Encounter(id=e["id"], lat=lat, lon=lon, start=e.get("start"), end=e.get("end"),
-                               duration_hours=e.get("durationHours"), type=e.get("type"),
-                               median_distance_km=e.get("medianDistanceKm"), median_speed_knots=e.get("medianSpeedKnots"),
-                               potential_risk=bool(e.get("potentialRisk")), shore_km=e.get("shoreKm"), high_seas=bool(e.get("highSeas")),
+                               duration_hours=_r(e.get("durationHours")), type=e.get("type"),
+                               median_distance_km=_r(e.get("medianDistanceKm"), 3), median_speed_knots=_r(e.get("medianSpeedKnots"), 2),
+                               potential_risk=bool(e.get("potentialRisk")), shore_km=_r(e.get("shoreKm")), high_seas=bool(e.get("highSeas")),
                                place=sea_name(lat, lon), rfmo=e.get("rfmo") or [], vessels=vessels, dark_link=dark,
                                statements=stmts))
     # strongest leads first: AIS off nearby, then GFW's risk flag, then the longest meetings
@@ -647,8 +671,8 @@ def loitering(d: dict, enc: list[dict]) -> S.LoiteringResponse:
                            ". Also consistent with waiting for orders, a berth, or better weather.")),
                   _st(REC, "Look for fishing vessels nearby that went dark at the same time, and the RFMO's transshipment records.")]
         out.append(S.Loitering(id=e["id"], lat=lat, lon=lon, start=e.get("start"), end=e.get("end"),
-                               duration_hours=e.get("durationHours"), distance_km=e.get("distanceKm"), speed_knots=e.get("speedKnots"),
-                               shore_km=e.get("shoreKm"), high_seas=bool(e.get("highSeas")), place=sea_name(lat, lon),
+                               duration_hours=_r(e.get("durationHours")), distance_km=_r(e.get("distanceKm")),
+                               speed_knots=_r(e.get("speedKnots"), 2), shore_km=_r(e.get("shoreKm")), high_seas=bool(e.get("highSeas")), place=sea_name(lat, lon),
                                vessel_id=e.get("vesselId"), vessel_name=e.get("vesselName"), flag=e.get("flag"),
                                vessel_type=e.get("vesselType"), met_vessel=hit, statements=stmts))
     out.sort(key=lambda x: (not x.met_vessel, -(x.duration_hours or 0)))

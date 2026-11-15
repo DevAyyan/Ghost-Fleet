@@ -12,6 +12,10 @@ export type LonLat = [number, number];
 
 export interface Envelope { isDemoData: boolean }
 export interface Statement { label: EpistemicLabel; text: string }
+/** `?compact=true` on the list endpoints: each distinct statement is sent once, in `statementTable`, and every record
+ *  lists its own as `statementIds`. api/client.ts expands it back, so the rest of the app only ever sees `statements`. */
+export interface SharesStatements { statements: Statement[]; statementIds?: number[] }
+export interface StatementTable { statementTable?: Statement[] }
 
 export interface Trend {
   direction: Direction;
@@ -127,12 +131,13 @@ export interface DisproofResponse extends Envelope {
 }
 
 // ---------- /api/sea/*: live awareness layers ----------
-export interface AisOffEvent {
+export interface AisOffEvent extends SharesStatements {
   id: string; lat: number; lon: number; start: string | null; end: string | null;
   durationHours: number | null; distanceKm: number | null;
   vesselName: string | null; flag: string | null; vesselType: string | null; shoreKm: number | null;
   place: string; inProtectedArea: boolean; inNoTake: boolean; highSeas: boolean; statements: Statement[];
   vesselId?: string | null; mmsi?: string | null; onLat?: number | null; onLon?: number | null; likelyIntentional?: boolean;
+  noTakeAreaIds?: string[]; partNoTakeAreaIds?: string[];   // WDPA ids of the no-take areas it went dark in
 }
 export interface AisOffHotspot {
   id: string; lat: number; lon: number; radiusKm: number; count: number; place: string;
@@ -154,7 +159,7 @@ export interface CoordinatedTurnOn {
   topFlags: string[]; vesselTypes: string[]; vessels: CoordinatedTurnOnVessel[];
   statements: Statement[];
 }
-export interface AisOffResponse extends Envelope {
+export interface AisOffResponse extends Envelope, StatementTable {
   fetchedAt: string; windowDays: number; recentDays: number; total: number;
   events: AisOffEvent[]; hotspots: AisOffHotspot[]; turnOnClusters?: CoordinatedTurnOn[]; heat: [number, number][]; source: string;
   start?: string | null; end?: string | null; truncated?: boolean;
@@ -164,20 +169,20 @@ export interface SlickCandidate {
   rank: number; type: "VESSEL" | "DARK_VESSEL" | "INFRASTRUCTURE" | "UNKNOWN"; ref: string; score: number | null;
   url: string | null; wentDark: boolean; vesselName: string | null;
 }
-export interface OilSlick {
+export interface OilSlick extends SharesStatements {
   id: string; lat: number; lon: number; time: string | null; areaKm2: number; lengthKm: number;
   confidence: number; possibleSource: SlickSource; place: string; url: string | null; statements: Statement[];
   candidates: SlickCandidate[];
 }
-export interface SlicksResponse extends Envelope {
+export interface SlicksResponse extends Envelope, StatementTable {
   fetchedAt: string; windowDays: number; totalMatched: number | null; slicks: OilSlick[]; source: string; candidatesAvailable?: boolean;
 }
-export interface ProtectedFishingEvent {
+export interface ProtectedFishingEvent extends SharesStatements {
   id: string; lat: number; lon: number; start: string | null; end: string | null; durationHours: number | null;
   vesselName: string | null; flag: string | null; vesselType: string | null; shoreKm: number | null;
-  fullNoTake: boolean; place: string; statements: Statement[]; vesselId?: string | null;
+  fullNoTake: boolean; place: string; statements: Statement[]; vesselId?: string | null; areaIds?: string[];
 }
-export interface ProtectedFishingResponse extends Envelope {
+export interface ProtectedFishingResponse extends Envelope, StatementTable {
   fetchedAt: string; days: string[]; scanned: number; events: ProtectedFishingEvent[]; source: string;
 }
 
@@ -204,22 +209,22 @@ export interface EncounterVessel {
   vesselId: string | null; name: string | null; flag: string | null; vesselType: string | null; mmsi: string | null;
   authorisation: Authorisation; wentDark: boolean;
 }
-export interface Encounter {
+export interface Encounter extends SharesStatements {
   id: string; lat: number; lon: number; start: string | null; end: string | null; durationHours: number | null;
   type: string | null; medianDistanceKm: number | null; medianSpeedKnots: number | null; potentialRisk: boolean;
   shoreKm: number | null; highSeas: boolean; place: string; rfmo: string[]; vessels: EncounterVessel[]; darkLink: boolean;
   statements: Statement[];
 }
-export interface EncountersResponse extends Envelope {
+export interface EncountersResponse extends Envelope, StatementTable {
   fetchedAt: string; start: string; end: string; truncated: boolean; total: number; events: Encounter[]; source: string;
 }
-export interface Loitering {
+export interface Loitering extends SharesStatements {
   id: string; lat: number; lon: number; start: string | null; end: string | null; durationHours: number | null;
   distanceKm: number | null; speedKnots: number | null; shoreKm: number | null; highSeas: boolean; place: string;
   vesselId: string | null; vesselName: string | null; flag: string | null; vesselType: string | null; metVessel: boolean;
   statements: Statement[];
 }
-export interface LoiteringResponse extends Envelope {
+export interface LoiteringResponse extends Envelope, StatementTable {
   fetchedAt: string; start: string; end: string; truncated: boolean; total: number; events: Loitering[]; source: string;
 }
 export interface VesselInsights extends Envelope {

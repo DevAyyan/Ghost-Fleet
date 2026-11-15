@@ -42,12 +42,22 @@ A world map of maritime intelligence and dark vessel activity, built from free p
 - **Drawers**: a record's symbol sits beside its title. The ship drawer has a figure of the vessel type with its recorded length (`ShipProfile.tsx`) and a timeline of the period showing dark stretches against fishing, port calls and meetings (`VesselTimeline.tsx`, `lib/timeline.ts`). On the map the open ship is drawn heading the way it last sailed, port calls are anchors, and every other record fades back.
 - Map labels are in plain words (no emoji); the "illegal fishing zones" toggle now reads "Outline the protected areas fished in", in line with leads-not-accusations.
 
+## Faster cold loads (2026-11-15)
+- Upstream calls an endpoint needs now run at once, and GFW event pages are fetched in waves: cold loitering 11.1 s → 1.6 s,
+  encounters 7.3 s → 1.7 s, slicks 13.6 s → ~6 s (Cerulean-bound). Measured locally from Karachi with an empty cache.
+- Each request has a 40 s upstream budget: a slow source now gives a stale copy or a clear 504 `UPSTREAM_TIMEOUT`,
+  never a killed function.
+- The list layers are fetched with `?compact=true` (each statement once): loitering 2.2 MB → 1.25 MB.
+- `.github/workflows/warm-cdn.yml` requests the default layers every 30 minutes.
+- Optional shared cache across instances: set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` on Vercel (not set yet).
+- Details and the region decision: `docs/decisions.md` §18.
+
 ## Working on the frontend without the backend
 - `frontend/.env.local` with `GHOSTFLEET_API=https://ghostfleet.earth` makes `npm run dev` forward `/api` to the live site, so no local backend or Global Fishing Watch token is needed. Leave `VITE_API_BASE` unset locally: the live API refuses browser requests from another address.
 
 ## Test & Build Status
-- **Backend**: 61/61 pytest tests passing in `backend/tests/`.
-- **Frontend**: 35/35 Vitest unit tests passing; TypeScript (`tsc --noEmit`) and Vite production build cleanly compiling with 0 errors.
+- **Backend**: 81/81 pytest tests passing in `backend/tests/`.
+- **Frontend**: 37/37 Vitest unit tests passing; TypeScript (`tsc --noEmit`) and Vite production build cleanly compiling with 0 errors.
 
 ## Repo split into two deployable parts (2026-11-15)
 - `backend/` is now self-contained: the API, its data (`backend/data/processed`, `backend/data/seed`, cache in

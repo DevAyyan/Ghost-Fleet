@@ -82,6 +82,24 @@ class Envelope(Model):
     is_demo_data: bool
 
 
+# ---------- ?compact=true on the list endpoints: each distinct statement sent once per response ----------
+def _unset(v) -> bool:
+    return v is None
+
+
+class SharesStatements(Model):
+    """A record whose statements may be sent as indices into its response's statementTable."""
+    statement_ids: list[int] | None = Field(None, exclude_if=_unset, description=(
+        "Only with ?compact=true: this record's statements, in order, as indices into the response's statementTable "
+        "(`statements` is then empty). Absent otherwise."))
+
+
+class StatementTable(Model):
+    """A response whose records' statements may be pooled (?compact=true)."""
+    statement_table: list[Statement] | None = Field(None, exclude_if=_unset, description=(
+        "Only with ?compact=true: every distinct statement of the records, once. Absent otherwise."))
+
+
 # ---------- error ----------
 class ErrorBody(Model):
     code: str
@@ -274,7 +292,7 @@ class CaseFile(Envelope):
 
 
 # ---------- /api/sea/*: live awareness layers ----------
-class AisOffEvent(Model):
+class AisOffEvent(SharesStatements):
     id: str
     lat: float
     lon: float = Field(description="Where the vessel stopped broadcasting")
@@ -296,6 +314,10 @@ class AisOffEvent(Model):
     on_lat: float | None = Field(default=None, description="Where the vessel started broadcasting again")
     on_lon: float | None = None
     likely_intentional: bool = Field(default=True, description="False if GFW does not class the gap as switched off on purpose")
+    no_take_area_ids: list[str] = Field(default_factory=list,
+                                        description="WDPA ids (SITE_PID) of fully no-take protected areas where the signal stopped")
+    part_no_take_area_ids: list[str] = Field(default_factory=list,
+                                             description="WDPA ids of partly no-take protected areas where the signal stopped")
 
 
 class AisOffHotspot(Model):
@@ -354,7 +376,7 @@ class CoordinatedTurnOn(Model):
     statements: list[Statement]
 
 
-class AisOffResponse(Envelope):
+class AisOffResponse(Envelope, StatementTable):
     fetched_at: str
     window_days: int
     recent_days: int
@@ -379,7 +401,7 @@ class SlickCandidate(Model):
     vessel_name: str | None = Field(None, description="Known from a matching AIS-off event, else looked up on demand")
 
 
-class OilSlick(Model):
+class OilSlick(SharesStatements):
     id: str
     lat: float
     lon: float
@@ -394,7 +416,7 @@ class OilSlick(Model):
     candidates: list[SlickCandidate] = Field(default_factory=list, description="Ranked candidate sources (Cerulean), best first")
 
 
-class SlicksResponse(Envelope):
+class SlicksResponse(Envelope, StatementTable):
     fetched_at: str
     window_days: int
     total_matched: int | None = Field(description="Slicks above the size and confidence floor in the window; the largest are returned")
@@ -405,7 +427,7 @@ class SlicksResponse(Envelope):
     source: str = "SkyTruth Cerulean (machine-detected on Sentinel-1 radar; not verified by a person)"
 
 
-class ProtectedFishingEvent(Model):
+class ProtectedFishingEvent(SharesStatements):
     id: str
     lat: float
     lon: float
@@ -420,9 +442,10 @@ class ProtectedFishingEvent(Model):
     place: str
     statements: list[Statement]
     vessel_id: str | None = None
+    area_ids: list[str] = Field(default_factory=list, description="WDPA ids (SITE_PID) of the no-take protected areas it was in")
 
 
-class ProtectedFishingResponse(Envelope):
+class ProtectedFishingResponse(Envelope, StatementTable):
     fetched_at: str
     days: list[str]
     scanned: int = Field(description="Apparent-fishing events examined for those days")
@@ -494,7 +517,7 @@ class EncounterVessel(Model):
     went_dark: bool = Field(False, description="Switched AIS off (likely intentionally) within 48 h before or after the encounter")
 
 
-class Encounter(Model):
+class Encounter(SharesStatements):
     id: str
     lat: float
     lon: float
@@ -514,7 +537,7 @@ class Encounter(Model):
     statements: list[Statement]
 
 
-class EncountersResponse(Envelope):
+class EncountersResponse(Envelope, StatementTable):
     fetched_at: str
     start: str
     end: str
@@ -525,7 +548,7 @@ class EncountersResponse(Envelope):
 
 
 # ---------- /api/sea/loitering: carriers waiting far offshore ----------
-class Loitering(Model):
+class Loitering(SharesStatements):
     id: str
     lat: float
     lon: float
@@ -545,7 +568,7 @@ class Loitering(Model):
     statements: list[Statement]
 
 
-class LoiteringResponse(Envelope):
+class LoiteringResponse(Envelope, StatementTable):
     fetched_at: str
     start: str
     end: str

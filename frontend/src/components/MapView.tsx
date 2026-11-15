@@ -7,7 +7,7 @@ import type {
 } from "../api/types";
 import { directionGlyph, directionWord, formatDateTime, formatDay, formatPct, formatSpan, vesselWord } from "../lib/format";
 import { bearing, chaikin, clusterShape, convexHull, pointInRing, scaleRing, unwrapLon, type Pt } from "../lib/geometry";
-import { BORDER, CLOSURE, ENCOUNTER, FISHING, ICONS, INK, LOITER, MAGENTA, OIL, PAPER, SLICK, TURNON, UNCLASSED, WIND, drawSilhouette, hullPath, iconSvg, type IconName } from "../lib/icons";
+import { BORDER, CLOSURE, ENCOUNTER, FISHING, ICONS, INK, LOITER, MAGENTA, NOTAKE, OIL, PAPER, SLICK, TURNON, UNCLASSED, WIND, drawSilhouette, hullPath, iconSvg, type IconName } from "../lib/icons";
 import { gibsTiles, type LayerId, type Period, type Selection } from "../lib/layers";
 import { TRACK_RAMP, trackFeatures } from "../lib/track";
 import { sdfImage } from "../lib/sdf";
@@ -202,9 +202,9 @@ const POINT_LAYERS = [["fishing-pt", "fishing"], ["encounter-pt", "encounter"], 
   ["turnon-pt", "turnOn"], ["loiter-pt", "loitering"], ["slick-pt", "slick"]] as const;
 /** Record layers and their resting opacity. They fade while one ship's path is open, so the path reads first. */
 const FADE: [layer: string, prop: "icon-opacity" | "circle-opacity" | "circle-stroke-opacity" | "heatmap-opacity", rest: number][] = [
-  ["heat", "heatmap-opacity", 0.85], ["slick-pt", "icon-opacity", 0.9], ["aisoff-pt", "icon-opacity", 1], ["aisoff-ring", "circle-stroke-opacity", 1],
+  ["heat", "heatmap-opacity", 0.85], ["slick-pt", "icon-opacity", 0.9], ["aisoff-pt", "icon-opacity", 1],
   ["closure-pt", "circle-opacity", 0.75], ["loiter-pt", "icon-opacity", 1], ["encounter-pt", "icon-opacity", 1], ["encounter-ring", "circle-stroke-opacity", 1],
-  ["fishing-pt", "icon-opacity", 1], ["fishing-ring", "circle-stroke-opacity", 1], ["turnon-pt", "icon-opacity", 1], ["turnon-halo", "circle-opacity", 1],
+  ["fishing-pt", "icon-opacity", 1], ["turnon-pt", "icon-opacity", 1], ["turnon-halo", "circle-opacity", 1],
 ];
 const SOURCE_TIP = { VESSEL: "a vessel on AIS", INFRASTRUCTURE: "an offshore structure", DARK_VESSEL: "a vessel not on AIS",
                      NATURAL: "a natural seep", UNKNOWN: "no source matched" } as const;
@@ -227,6 +227,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const hullsRef = useRef<{ id: string; ring: Pt[] }[]>([]);
+  const noTakeFullRef = useRef(new Set<string>());   // WDPA ids of the wholly no-take areas outlined, for the click popup
   const labelMarkers = useRef<maplibregl.Marker[]>([]);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
@@ -283,12 +284,21 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
   }), [aisOff]);
   // Each ship that went dark is an empty hull, its bow turned toward where it reappeared.
   const aisOffGeo = useMemo(() => points(aisOff?.events ?? [], (e) => ({
-    id: e.id, noTake: e.inNoTake, mark: markIcon(vesselClass(e.vesselType)), tipShip: JSON.stringify(ghostShip(e.vesselType, 0)),
+    id: e.id, mark: markIcon(vesselClass(e.vesselType)), tipShip: JSON.stringify(ghostShip(e.vesselType, 0)),
     bearing: (e.onLat != null && e.onLon != null ? bearing([e.lon, e.lat], [e.onLon, e.onLat]) : null) ?? 0,
     tip: e.vesselName ?? "Unnamed vessel",
     tipText: `${vesselWord(e.vesselType)}, flag ${e.flag ?? "unknown"}. Dark for ${formatSpan(e.durationHours)} from ${formatDay(e.start)}`
       + `${e.distanceKm != null && e.end ? `; reappeared ${Math.round(e.distanceKm).toLocaleString()} km away` : ""}.${e.inNoTake ? " Inside a no-take area." : ""}`,
   })), [aisOff]);
+  // The no-take protected areas the records fall in, by WDPA id. GFW tags each event with them; the WDPA tiles carry no
+  // no-take flag of their own, so these ids pick which outlines to draw.
+  const noTakeIds = useMemo(() => {
+    const full = new Set<string>(), part = new Set<string>();
+    for (const e of aisOff?.events ?? []) { e.noTakeAreaIds?.forEach((id) => full.add(id)); e.partNoTakeAreaIds?.forEach((id) => part.add(id)); }
+    for (const f of fishing) f.areaIds?.forEach((id) => (f.fullNoTake ? full : part).add(id));
+    for (const id of full) part.delete(id);
+    return { full: [...full], part: [...part] };
+  }, [aisOff, fishing]);
   const aisById = useMemo(() => new Map((aisOff?.events ?? []).map((e) => [e.id, e])), [aisOff]);
   aisByIdRef.current = aisById;
   const slickGeo = useMemo(() => points(slicks, (s) => {
@@ -392,6 +402,17 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       m.addLayer({ id: "eez-line", type: "line", source: "eez", "source-layer": "main",
                    paint: { "line-color": BORDER, "line-opacity": 0.75, "line-dasharray": [3, 2],
                             "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.6, 6, 1.4] } });
+      // no-take marine protected areas (WDPA via GFW): only those a record falls in, picked by id once the data is in.
+      // Wholly no-take: a solid green edge; partly no-take (only a zone inside is): a dashed one, fainter.
+      m.addSource("mpa", { type: "vector", tiles: [api.contextTiles("mpa")], maxzoom: 9, attribution: "Protected Planet WDPA" });
+      const none: maplibregl.FilterSpecification = ["==", ["literal", 0], 1];
+      m.addLayer({ id: "notake-fill", type: "fill", source: "mpa", "source-layer": "main", filter: none,
+                   paint: { "fill-color": NOTAKE, "fill-opacity": 0.12 } });
+      m.addLayer({ id: "notake-line", type: "line", source: "mpa", "source-layer": "main", filter: none,
+                   paint: { "line-color": NOTAKE, "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1, 7, 2.2] } });
+      m.addLayer({ id: "notake-line-part", type: "line", source: "mpa", "source-layer": "main", filter: none,
+                   paint: { "line-color": NOTAKE, "line-opacity": 0.8, "line-dasharray": [3, 2],
+                            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.8, 7, 1.6] } });
       m.addSource("infra", { type: "vector", tiles: [api.contextTiles("infra")], minzoom: 3, maxzoom: 9, attribution: "Global Fishing Watch" });
       symbols("infra-pt", "infra", { visibility: "none", "icon-image": INFRA_ICON, "icon-size": ["interpolate", ["linear"], ["zoom"], 3, 0.38, 8, 0.95] },
               { "source-layer": "main", minzoom: 3,
@@ -421,7 +442,6 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       // AIS switched off: an empty hull, bow toward where the ship reappeared, short for fishing vessels and long for the rest.
       // For the ship under the pointer or open in the drawer, a broken line runs to where its signal came back.
       const aisOffLayers = () => {
-        ring("aisoff-ring", "aisoff", ["==", ["get", "noTake"], true], MAGENTA, ringRadius(33));   // went dark inside a no-take area
         m.addLayer({ id: "aisoff-wake", type: "line", source: "aisoff-wake", filter: ["==", ["geometry-type"], "LineString"],
                      paint: { "line-color": MAGENTA, "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.2, 8, 2.2], "line-dasharray": [1.5, 1.5] } });
         m.addLayer({ id: "aisoff-wake-pt", type: "circle", source: "aisoff-wake", filter: ["==", ["geometry-type"], "Point"],
@@ -459,8 +479,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
         id: "illegal-zone-line", type: "line", source: "illegal-zones",
         paint: { "line-color": FISHING, "line-width": 2, "line-dasharray": [4, 2] },
       });
-      // apparent fishing inside marine protected areas: a red fishing hull, ringed where the area is strictly no-take
-      ring("fishing-ring", "fishing", ["==", ["get", "fullNoTake"], true], FISHING, ringRadius(27));
+      // apparent fishing inside marine protected areas: a red fishing hull (the no-take area itself is outlined in green)
       symbols("fishing-pt", "fishing", { "icon-image": "mark-fishing", "icon-size": markSize(1.1) },
               { paint: { "icon-color": FISHING, "icon-halo-color": PAPER, "icon-halo-width": 2.4 } });
 
@@ -641,6 +660,16 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
           }
         }
 
+        if (m.getLayoutProperty("notake-fill", "visibility") !== "none") {
+          const p = m.queryRenderedFeatures(box(e), { layers: ["notake-fill"] })[0]?.properties as Record<string, unknown> | undefined;
+          if (p) {
+            const full = noTakeFullRef.current.has(String(p.SITE_PID));
+            return say(e, `${p.NAME ?? "Marine protected area"}${p.DESIG ? ` (${p.DESIG})` : ""}. `
+              + (full ? "No-take: all fishing is banned here." : "Partly no-take: fishing is banned in a zone inside it.")
+              + " Outlined because a record on the map falls inside it. Source: Protected Planet WDPA.");
+          }
+        }
+
         if (m.getLayoutProperty("illegal-zone-fill", "visibility") !== "none") {
           const hitZone = m.queryRenderedFeatures([[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]], { layers: ["illegal-zone-fill"] })[0];
           if (hitZone) {
@@ -665,6 +694,19 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     map.current = m;
     return () => { m.remove(); map.current = null; };
   }, []);
+
+  // which no-take areas to outline
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m) return;
+    const pid: maplibregl.ExpressionSpecification = ["to-string", ["get", "SITE_PID"]];
+    noTakeFullRef.current = new Set(noTakeIds.full);
+    const all = [...noTakeIds.full, ...noTakeIds.part];
+    m.setFilter("notake-fill", ["in", pid, ["literal", all]]);
+    m.setFilter("notake-line", ["in", pid, ["literal", noTakeIds.full]]);
+    m.setFilter("notake-line-part", ["in", pid, ["literal", noTakeIds.part]]);
+    m.setPaintProperty("notake-fill", "fill-opacity", ["case", ["in", pid, ["literal", noTakeIds.full]], 0.16, 0.08]);
+  }, [ready, noTakeIds]);
 
   // data
   useEffect(() => {
@@ -822,8 +864,9 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     const show = (layer: string, on: boolean) => m.setLayoutProperty(layer, "visibility", on ? "visible" : "none");
     show("night", visible.nightLights); show("chl", visible.chlorophyll); show("lanes", visible.lanes);
     show("heat", visible.hotspots); show("slick-pt", visible.slicks);
-    show("aisoff-pt", visible.aisOff); show("aisoff-ring", visible.aisOff); show("aisoff-wake", visible.aisOff); show("aisoff-wake-pt", visible.aisOff);
-    show("fishing-pt", visible.fishing); show("fishing-ring", visible.fishing);
+    show("aisoff-pt", visible.aisOff); show("aisoff-wake", visible.aisOff); show("aisoff-wake-pt", visible.aisOff);
+    show("fishing-pt", visible.fishing);
+    for (const id of ["notake-fill", "notake-line", "notake-line-part"]) show(id, visible.aisOff || visible.fishing);
     show("illegal-zone-fill", visible.fishing && highlightIllegalZones);
     show("illegal-zone-line", visible.fishing && highlightIllegalZones);
     show("turnon-pt", visible.turnOns);

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, _request, toApiError } from "../api/client";
+import { ApiError, _request, expandStatements, toApiError } from "../api/client";
 import { divergingColor, robustMax, sequentialColor } from "./color";
 import { trackFeatures } from "./track";
-import type { VesselResponse } from "../api/types";
+import type { LoiteringResponse, VesselResponse } from "../api/types";
 import { imageDay, lastDays, monthsIn, periodProblem, spanDays } from "./layers";
 import { directionGlyph, formatDay, formatMonth, formatP, formatPct, formatSpan, humanCellId, vesselWord } from "./format";
 
@@ -112,5 +112,21 @@ describe("api client errors", () => {
   it("maps network failures to NETWORK_ERROR", async () => {
     const failing = (() => Promise.reject(new TypeError("fetch failed"))) as unknown as typeof fetch;
     await expect(_request("/api/meta", undefined, failing)).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+  });
+});
+
+describe("expandStatements", () => {
+  const obs = { label: "OBSERVATION", text: "seen" } as const;
+  const rec = { label: "RECOMMENDATION", text: "check" } as const;
+  it("gives each record its statements back, in order, and drops the table", () => {
+    const r = { statementTable: [obs, rec], events: [{ id: "a", statements: [], statementIds: [0, 1] }, { id: "b", statements: [], statementIds: [1] }] };
+    const out = expandStatements(r as unknown as LoiteringResponse, "events");
+    expect(out.statementTable).toBeUndefined();
+    expect(out.events.map((e) => e.statements)).toEqual([[obs, rec], [rec]]);
+    expect(out.events[0].statementIds).toBeUndefined();
+  });
+  it("leaves a response without a table untouched", () => {
+    const r = { events: [{ id: "a", statements: [obs] }] } as unknown as LoiteringResponse;
+    expect(expandStatements(r, "events")).toBe(r);
   });
 });

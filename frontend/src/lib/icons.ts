@@ -6,6 +6,8 @@
 
 export const INK = "#13263b", PAPER = "#f3f6f5", MAGENTA = "#a3166f", SHELF = "#2d6a9f";
 export const SLICK = "#8a5a00", FISHING = "#a3271b", TURNON = "#0284c7", ENCOUNTER = "#c2410c", LOITER = "#0f766e";
+/** No-take marine protected areas: every kind of fishing banned. */
+export const NOTAKE = "#2e7d32";
 export const CLOSURE = "#6d28d9", BORDER = "#3d4f63", OIL = "#5a3e1b", WIND = "#1f6b4a", UNCLASSED = "#7a8794";
 
 export interface Shape {

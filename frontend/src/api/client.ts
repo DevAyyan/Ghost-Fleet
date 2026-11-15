@@ -1,6 +1,6 @@
 import type {
   AisOffResponse, ClosuresResponse, EncountersResponse, LoiteringResponse, VesselInsights, ProtectedFishingResponse, SlicksResponse, VesselResponse, VesselSearchResponse,
-  ApiErrorBody, CellDetailResponse, DetectionPoint, PackedDetection, CellsResponse, DetectionsResponse, DisproofResponse, DisproofVariant,
+  ApiErrorBody, SharesStatements, StatementTable, CellDetailResponse, DetectionPoint, PackedDetection, CellsResponse, DetectionsResponse, DisproofResponse, DisproofVariant,
   EventDetailResponse, EventsResponse, MetaResponse,
 } from "./types";
 
@@ -8,6 +8,16 @@ const BASE = import.meta.env?.VITE_API_BASE ?? "";
 
 export function unpackDetections(rows: PackedDetection[]): DetectionPoint[] {
   return rows.map(([lat, lon, unmatched, matched]) => ({ lat, lon, unmatched, matched }));
+}
+
+/** Undo `?compact=true`: give every record its statements back from the response's statementTable, in order. */
+export function expandStatements<R extends StatementTable, K extends keyof R>(r: R, key: K): R {
+  const table = r.statementTable;
+  if (!table) return r;
+  const records = (r[key] as unknown as SharesStatements[]).map(({ statementIds, ...rec }) =>
+    statementIds ? { ...rec, statements: statementIds.map((i) => table[i]) } : rec);
+  const { statementTable: _, ...rest } = r;
+  return { ...rest, [key]: records } as unknown as R;
 }
 
 export class ApiError extends Error {
@@ -58,17 +68,24 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(variants ? { variants } : {}),
     }),
-  aisOff: (start: string, end: string) => request<AisOffResponse>(`/api/sea/ais-off?start=${start}&end=${end}`),
-  slicks: (start: string, end: string) => request<SlicksResponse>(`/api/sea/slicks?start=${start}&end=${end}`),
-  protectedFishing: (start: string, end: string) => request<ProtectedFishingResponse>(`/api/sea/protected-fishing?start=${start}&end=${end}`),
+  // The list layers are asked for in compact form (each distinct statement once) and expanded here.
+  // .github/workflows/warm-cdn.yml requests these exact URLs to keep the CDN warm: keep the two in step.
+  aisOff: async (start: string, end: string) =>
+    expandStatements(await request<AisOffResponse>(`/api/sea/ais-off?start=${start}&end=${end}&compact=true`), "events"),
+  slicks: async (start: string, end: string) =>
+    expandStatements(await request<SlicksResponse>(`/api/sea/slicks?start=${start}&end=${end}&compact=true`), "slicks"),
+  protectedFishing: async (start: string, end: string) =>
+    expandStatements(await request<ProtectedFishingResponse>(`/api/sea/protected-fishing?start=${start}&end=${end}&compact=true`), "events"),
   vessel: (id: string, start: string, end: string) => request<VesselResponse>(`/api/sea/vessels/${encodeURIComponent(id)}?start=${start}&end=${end}`),
-  encounters: (start: string, end: string) => request<EncountersResponse>(`/api/sea/encounters?start=${start}&end=${end}`),
-  loitering: (start: string, end: string) => request<LoiteringResponse>(`/api/sea/loitering?start=${start}&end=${end}`),
+  encounters: async (start: string, end: string) =>
+    expandStatements(await request<EncountersResponse>(`/api/sea/encounters?start=${start}&end=${end}&compact=true`), "events"),
+  loitering: async (start: string, end: string) =>
+    expandStatements(await request<LoiteringResponse>(`/api/sea/loitering?start=${start}&end=${end}&compact=true`), "events"),
   closures: () => request<ClosuresResponse>("/api/sea/closures"),
   insights: (id: string, start: string, end: string) =>
     request<VesselInsights>(`/api/sea/vessels/${encodeURIComponent(id)}/insights?start=${start}&end=${end}`),
   /** Vector tiles of sea borders ("eez") or offshore platforms ("infra"), proxied from Global Fishing Watch. */
-  contextTiles: (layer: "eez" | "infra") => `${BASE || window.location.origin}/api/sea/context/${layer}/{z}/{x}/{y}.pbf`,
+  contextTiles: (layer: "eez" | "infra" | "mpa") => `${BASE || window.location.origin}/api/sea/context/${layer}/{z}/{x}/{y}.pbf`,
   effortTiles: (start: string, end: string) => `${BASE || window.location.origin}/api/sea/effort/{z}/{x}/{y}.png?start=${start}&end=${end}`,
   searchVessels: (q: string) => request<VesselSearchResponse>(`/api/sea/vessels/search?q=${encodeURIComponent(q)}`),
   /** MapLibre needs an absolute tile URL template. */

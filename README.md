@@ -246,6 +246,8 @@ because the worldwide scan runs then.
 | `GHOSTFLEET_DATA` | `real` | `real` or `synthetic` (synthetic is for tests only) |
 | `GHOSTFLEET_PANEL` | `backend/data/processed/panel_real.json` | Path to the trend panel |
 | `GHOSTFLEET_CACHE` | `backend/data/raw` (`/tmp/ghostfleet` on Vercel) | Where fetched data is cached |
+| `GHOSTFLEET_UPSTREAM_BUDGET` | `40` | Seconds one request may spend on upstream calls in all (then 504 `UPSTREAM_TIMEOUT`) |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | unset (off) | Optional cache shared by all API instances (Upstash Redis, free tier); `KV_REST_API_URL`/`KV_REST_API_TOKEN` also work |
 | `GHOSTFLEET_CORS` | `*` (any site; the API is public and read-only) | Comma-separated allowed origins |
 | `GHOSTFLEET_MAX_MAP_CELLS` | `20000` | Cap on cells returned by `/api/cells` |
 | `GHOSTFLEET_SEED` | `7` | Seed for synthetic data |

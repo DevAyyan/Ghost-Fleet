@@ -199,7 +199,7 @@ export function LayerRail(p: Props) {
         {aisOff.data.truncated && <p className="muted layer-empty">This period has more events than can be fetched; the newest 15,000 are used.</p>}
         <Key items={[[{ kind: "fishing", look: "ghost" }, "Fishing vessel"], [{ kind: "cargo", look: "ghost" }, "Cargo ship"],
                      [{ kind: "carrier", look: "ghost" }, "Refrigerated carrier"], [{ kind: "tanker", look: "ghost" }, "Bunker tanker"]]}
-          note="A ship that stopped broadcasting is drawn empty. From far out it is a small white hull; zoom in and it becomes the ship. The bow points to where it reappeared, a ring marks one that went dark inside a no-take area, and pointing at a ship shows the stretch it sailed unseen." />
+          note="A ship that stopped broadcasting is drawn empty. From far out it is a small white hull; zoom in and it becomes the ship. The bow points to where it reappeared, and pointing at a ship shows the stretch it sailed unseen. No-take protected areas the ships went dark in are outlined in green; click one for its name." />
         <Rows items={aisOff.data.events} kind="aisOff" selection={selection} onSelect={onSelect} label="Vessels that switched AIS off, newest first"
         title={(e) => <Ship name={e.vesselName} type={e.vesselType} />}
         meta={(e) => `${vesselWord(e.vesselType)}, flag ${e.flag ?? "unknown"}. ${e.place}, ${formatDay(e.start)}, dark for ${formatSpan(e.durationHours)}.`} />
@@ -240,7 +240,7 @@ export function LayerRail(p: Props) {
             </div>
           )}
         </div>
-        <Key items={[[{ kind: "fishing", hull: "#a3271b" }, "A vessel that moved as if fishing"]]} note="A ring marks a strict no-take area, where no fishing is allowed at all." />
+        <Key items={[[{ kind: "fishing", hull: "#a3271b" }, "A vessel that moved as if fishing"]]} note="No-take protected areas, where all fishing is banned, are outlined in green: a solid edge where the whole area is no-take, a dashed one where only a zone inside it is. Click an area for its name." />
         <p className="muted layer-empty">This layer is built a day at a time. Days checked so far: {formatDay(fishing.data.days[0])} to {formatDay(fishing.data.days[fishing.data.days.length - 1])} ({fishing.data.scanned.toLocaleString()} apparent-fishing events).</p>
         <Rows items={filteredFishing} kind="fishing" selection={selection} onSelect={onSelect} label="Apparent fishing inside marine protected areas"
           title={(f) => <Ship name={f.vesselName} type={f.vesselType ?? "fishing"} />}

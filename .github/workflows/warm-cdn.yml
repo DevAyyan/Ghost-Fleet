@@ -1,0 +1,45 @@
+# Keeps the live layers warm so most visitors never wait for a cold upstream fetch.
+#
+# Every 30 minutes it requests the exact URLs the app loads by default (the last 30 days, compact lists; see
+# frontend/src/api/client.ts and App.tsx). That refreshes Vercel's CDN copy (s-maxage=3600, stale-while-revalidate),
+# the function's own cache and, if configured, the shared Redis cache. Vercel's CDN caches per region, so the CDN copy
+# warmed here sits near GitHub's runners; visitors elsewhere still get a fast answer from the already-warm function.
+# Set the repository variable WARM_BASE_URL to warm another deployment. It never fails the run on a slow upstream: it
+# only warns, so a bad hour at Global Fishing Watch does not send a stream of failure emails.
+name: Warm CDN
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"        # off the hour: GitHub delays jobs scheduled exactly on it
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Request the default layers
+        env:
+          BASE: ${{ vars.WARM_BASE_URL || 'https://ghostfleet.earth' }}
+        run: |
+          end=$(date -u +%F)
+          start=$(date -u -d "$end - 30 days" +%F)        # same days as lastDays(30) in frontend/src/lib/layers.ts
+          period="start=$start&end=$end&compact=true"
+          paths=(
+            "api/meta"
+            "api/sea/ais-off?$period"
+            "api/sea/slicks?$period"
+            "api/sea/protected-fishing?$period"
+            "api/sea/encounters?$period"
+            "api/sea/loitering?$period"
+          )
+          for p in "${paths[@]}"; do
+            # the same Accept-Encoding as a browser, so the warmed copy is the one browsers are served
+            out=$(curl -sS -o /dev/null --max-time 70 --retry 1 --retry-delay 5 \
+                  -H "Accept-Encoding: gzip, deflate, br, zstd" -H "User-Agent: ghostfleet-cdn-warmer" \
+                  -w "%{http_code} %{time_total}s cache=%header{x-vercel-cache}" "$BASE/$p" 2>&1) || true
+            echo "$out  /$p"
+            case "$out" in 200*) ;; *) echo "::warning::/$p answered: $out" ;; esac
+          done

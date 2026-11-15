@@ -123,7 +123,27 @@
     "/api/cells": {
       "get": {
         "summary": "Get Cells",
+        "description": "Every analysis cell, or with `?only=events` just the cells that belong to a change event (all the map needs).",
         "operationId": "get_cells_api_cells_get",
+        "parameters": [
+          {
+            "name": "only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^events$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Only"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -136,44 +156,44 @@
             }
           },
           "404": {
-            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Not Found"
           },
           "422": {
-            "description": "Unprocessable Content",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Content"
           },
           "500": {
-            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Internal Server Error"
           },
           "503": {
-            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Service Unavailable"
           }
         }
       }
@@ -181,7 +201,7 @@
     "/api/detections": {
       "get": {
         "summary": "Get Detections",
-        "description": "Vessel detections for one month (default: latest), fetched live from Global Fishing Watch (cached on disk).",
+        "description": "Vessel detections for one month (default: latest), fetched live from Global Fishing Watch (cached on disk).\n`?compact=true` returns the points as `packed` rows: a worldwide month is over 5 MB as objects, about 2 MB packed.",
         "operationId": "get_detections_api_detections_get",
         "parameters": [
           {
@@ -199,6 +219,16 @@
                 }
               ],
               "title": "Month"
+            }
+          },
+          {
+            "name": "compact",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Compact"
             }
           }
         ],
@@ -295,6 +325,18 @@
               ],
               "title": "End"
             }
+          },
+          {
+            "name": "compact",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Send each distinct statement once (statementTable + statementIds)",
+              "default": false,
+              "title": "Compact"
+            },
+            "description": "Send each distinct statement once (statementTable + statementIds)"
           }
         ],
         "responses": {
@@ -354,7 +396,7 @@
     "/api/sea/slicks": {
       "get": {
         "summary": "Get Slicks",
-        "description": "Largest possible oil slicks in a period (default: the last 30 days), machine-detected on Sentinel-1 radar (SkyTruth Cerulean).",
+        "description": "Largest possible oil slicks in a period (default: the last 30 days), machine-detected on Sentinel-1 radar (SkyTruth Cerulean),\neach with Cerulean's ranked candidate sources, cross-checked against AIS switched off within 48 hours.",
         "operationId": "get_slicks_api_sea_slicks_get",
         "parameters": [
           {
@@ -390,6 +432,18 @@
               ],
               "title": "End"
             }
+          },
+          {
+            "name": "compact",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Send each distinct statement once (statementTable + statementIds)",
+              "default": false,
+              "title": "Compact"
+            },
+            "description": "Send each distinct statement once (statementTable + statementIds)"
           }
         ],
         "responses": {
@@ -449,7 +503,7 @@
     "/api/sea/protected-fishing": {
       "get": {
         "summary": "Get Protected Fishing",
-        "description": "Apparent fishing inside no-take protected areas in a period. Built by scripts/ingest_sea.py; 503 until that has run.",
+        "description": "Apparent fishing inside no-take protected areas in a period. Built by backend/scripts/ingest_sea.py; 503 until that has run.",
         "operationId": "get_protected_fishing_api_sea_protected_fishing_get",
         "parameters": [
           {
@@ -485,6 +539,18 @@
               ],
               "title": "End"
             }
+          },
+          {
+            "name": "compact",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Send each distinct statement once (statementTable + statementIds)",
+              "default": false,
+              "title": "Compact"
+            },
+            "description": "Send each distinct statement once (statementTable + statementIds)"
           }
         ],
         "responses": {
@@ -821,18 +887,336 @@
         }
       }
     },
-    "/api/refresh": {
-      "post": {
-        "summary": "Refresh",
-        "description": "Reload the panel from disk after `scripts/ingest_real.py` has pulled new data. Safe to retry.",
-        "operationId": "refresh_api_refresh_post",
+    "/api/sea/encounters": {
+      "get": {
+        "summary": "Get Encounters",
+        "description": "Fishing vessels meeting carriers, bunkers, support vessels or tankers at sea (possible transshipment) in a period,\neach checked for AIS switched off by either vessel within 48 hours. Strongest leads first.",
+        "operationId": "get_encounters_api_sea_encounters_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "name": "compact",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Send each distinct statement once (statementTable + statementIds)",
+              "default": false,
+              "title": "Compact"
+            },
+            "description": "Send each distinct statement once (statementTable + statementIds)"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MetaResponse"
+                  "$ref": "#/components/schemas/EncountersResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/loitering": {
+      "get": {
+        "summary": "Get Loitering",
+        "description": "Carriers and bunker tankers loitering 20+ nautical miles offshore in a period, each checked for a recorded meeting.",
+        "operationId": "get_loitering_api_sea_loitering_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "name": "compact",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Send each distinct statement once (statementTable + statementIds)",
+              "default": false,
+              "title": "Compact"
+            },
+            "description": "Send each distinct statement once (statementTable + statementIds)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoiteringResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/vessels/{vessel_id}/insights": {
+      "get": {
+        "summary": "Get Vessel Insights",
+        "description": "IUU-list history, fishing without a known public authorisation, no-take MPA fishing and AIS-off counts for one ship.",
+        "operationId": "get_vessel_insights_api_sea_vessels__vessel_id__insights_get",
+        "parameters": [
+          {
+            "name": "vessel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Vessel Id"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VesselInsights"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/closures": {
+      "get": {
+        "summary": "Get Closures",
+        "description": "Apparent fishing during seasonal fishing bans, against the weeks around them. Built by scripts/ingest_closures.py.",
+        "operationId": "get_closures_api_sea_closures_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClosuresResponse"
                 }
               }
             }
@@ -876,6 +1260,300 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/sea/context/{layer}/{z}/{x}/{y}.pbf": {
+      "get": {
+        "summary": "Get Context Tile",
+        "description": "Vector tile of sea borders (`eez`, Marine Regions EEZs), offshore platforms (`infra`) or marine protected areas\n(`mpa`, WDPA), proxied from Global Fishing Watch.",
+        "operationId": "get_context_tile_api_sea_context__layer___z___x___y__pbf_get",
+        "parameters": [
+          {
+            "name": "layer",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Layer"
+            }
+          },
+          {
+            "name": "z",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Z"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "X"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Y"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/x-protobuf": {}
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/sea/effort/{z}/{x}/{y}.png": {
+      "get": {
+        "summary": "Get Effort Tile",
+        "description": "Fishing-effort tile (apparent fishing hours from AIS) for a period, drawn by Global Fishing Watch.",
+        "operationId": "get_effort_tile_api_sea_effort__z___x___y__png_get",
+        "parameters": [
+          {
+            "name": "z",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Z"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "X"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Y"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "image/png": {}
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/refresh": {
+      "post": {
+        "summary": "Refresh",
+        "description": "Reload the panel from disk after `backend/scripts/ingest_real.py` has pulled new data. Safe to retry.\n\nA reload re-runs the scan and blocks analysis requests meanwhile, so it is not open to the public: it needs the\nX-Refresh-Token header to match GHOSTFLEET_REFRESH_TOKEN, or, with no token configured, a call from this machine.",
+        "operationId": "refresh_api_refresh_post",
+        "parameters": [
+          {
+            "name": "x-refresh-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Refresh-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         }
       }
@@ -1288,6 +1966,21 @@
     "schemas": {
       "AisOffEvent": {
         "properties": {
+          "statementIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementids",
+            "description": "Only with ?compact=true: this record's statements, in order, as indices into the response's statementTable (`statements` is then empty). Absent otherwise."
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -1465,6 +2158,22 @@
             "title": "Likelyintentional",
             "description": "False if GFW does not class the gap as switched off on purpose",
             "default": true
+          },
+          "noTakeAreaIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notakeareaids",
+            "description": "WDPA ids (SITE_PID) of fully no-take protected areas where the signal stopped"
+          },
+          "partNoTakeAreaIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Partnotakeareaids",
+            "description": "WDPA ids of partly no-take protected areas where the signal stopped"
           }
         },
         "type": "object",
@@ -1573,6 +2282,21 @@
       },
       "AisOffResponse": {
         "properties": {
+          "statementTable": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Statement"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementtable",
+            "description": "Only with ?compact=true: every distinct statement of the records, once. Absent otherwise."
+          },
           "isDemoData": {
             "type": "boolean",
             "title": "Isdemodata"
@@ -1683,6 +2407,16 @@
           "heat"
         ],
         "title": "AisOffResponse"
+      },
+      "Authorisation": {
+        "type": "string",
+        "enum": [
+          "AUTHORISED",
+          "PARTLY",
+          "NOT_FOUND",
+          "UNKNOWN"
+        ],
+        "title": "Authorisation"
       },
       "CaseFile": {
         "properties": {
@@ -1936,6 +2670,207 @@
           "cells"
         ],
         "title": "CellsResponse"
+      },
+      "Closure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "eez": {
+            "type": "string",
+            "title": "Eez"
+          },
+          "window": {
+            "type": "string",
+            "title": "Window",
+            "description": "The ban each year, e.g. '1 Jun to 31 Jul'"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ConfidenceLevel",
+            "description": "How sure we are of the rule's dates and scope"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "seasons": {
+            "items": {
+              "$ref": "#/components/schemas/ClosureSeason"
+            },
+            "type": "array",
+            "title": "Seasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "country",
+          "name",
+          "eez",
+          "window",
+          "scope",
+          "confidence",
+          "sources",
+          "seasons"
+        ],
+        "title": "Closure"
+      },
+      "ClosureCell": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "hours": {
+            "type": "number",
+            "title": "Hours"
+          },
+          "vessels": {
+            "type": "integer",
+            "title": "Vessels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon",
+          "hours",
+          "vessels"
+        ],
+        "title": "ClosureCell"
+      },
+      "ClosureSeason": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "hoursBefore": {
+            "type": "number",
+            "title": "Hoursbefore"
+          },
+          "hoursDuring": {
+            "type": "number",
+            "title": "Hoursduring"
+          },
+          "hoursAfter": {
+            "type": "number",
+            "title": "Hoursafter"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio",
+            "description": "Fishing hours during the ban \u00f7 mean of the equal-length windows before and after"
+          },
+          "cellsDuring": {
+            "type": "integer",
+            "title": "Cellsduring"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/ClosureCell"
+            },
+            "type": "array",
+            "title": "Cells"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "year",
+          "start",
+          "end",
+          "days",
+          "hoursBefore",
+          "hoursDuring",
+          "hoursAfter",
+          "ratio",
+          "cellsDuring",
+          "cells",
+          "statements"
+        ],
+        "title": "ClosureSeason"
+      },
+      "ClosuresResponse": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "closures": {
+            "items": {
+              "$ref": "#/components/schemas/Closure"
+            },
+            "type": "array",
+            "title": "Closures"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch 4Wings fishing effort (AIS) per EEZ; ban dates from official notices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "closures"
+        ],
+        "title": "ClosuresResponse"
       },
       "Confidence": {
         "properties": {
@@ -2316,6 +3251,37 @@
             "type": "array",
             "title": "Points"
           },
+          "packed": {
+            "anyOf": [
+              {
+                "items": {
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array",
+                  "maxItems": 4,
+                  "minItems": 4
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packed",
+            "description": "With ?compact=true: the same points as [lat, lon, unmatched, matched] rows, and `points` is empty. Less than half the size, which matters for a worldwide month"
+          },
           "totalUnmatched": {
             "type": "integer",
             "title": "Totalunmatched"
@@ -2455,6 +3421,319 @@
           "STRICT_ALPHA"
         ],
         "title": "DisproofVariant"
+      },
+      "Encounter": {
+        "properties": {
+          "statementIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementids",
+            "description": "Only with ?compact=true: this record's statements, in order, as indices into the response's statementTable (`statements` is then empty). Absent otherwise."
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "durationHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationhours"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type",
+            "description": "GFW encounter type, e.g. carrier-fishing, bunker-fishing"
+          },
+          "medianDistanceKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mediandistancekm"
+          },
+          "medianSpeedKnots": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Medianspeedknots"
+          },
+          "potentialRisk": {
+            "type": "boolean",
+            "title": "Potentialrisk",
+            "description": "GFW's own flag: at least one vessel lacks a matching public authorisation"
+          },
+          "shoreKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shorekm"
+          },
+          "highSeas": {
+            "type": "boolean",
+            "title": "Highseas"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "rfmo": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rfmo"
+          },
+          "vessels": {
+            "items": {
+              "$ref": "#/components/schemas/EncounterVessel"
+            },
+            "type": "array",
+            "title": "Vessels"
+          },
+          "darkLink": {
+            "type": "boolean",
+            "title": "Darklink",
+            "description": "Either vessel switched AIS off within 48 h of the meeting"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lat",
+          "lon",
+          "start",
+          "end",
+          "durationHours",
+          "type",
+          "medianDistanceKm",
+          "medianSpeedKnots",
+          "potentialRisk",
+          "shoreKm",
+          "highSeas",
+          "place",
+          "rfmo",
+          "vessels",
+          "darkLink",
+          "statements"
+        ],
+        "title": "Encounter"
+      },
+      "EncounterVessel": {
+        "properties": {
+          "vesselId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselid"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "vesselType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesseltype"
+          },
+          "mmsi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mmsi"
+          },
+          "authorisation": {
+            "$ref": "#/components/schemas/Authorisation"
+          },
+          "wentDark": {
+            "type": "boolean",
+            "title": "Wentdark",
+            "description": "Switched AIS off (likely intentionally) within 48 h before or after the encounter",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "vesselId",
+          "name",
+          "flag",
+          "vesselType",
+          "mmsi",
+          "authorisation"
+        ],
+        "title": "EncounterVessel"
+      },
+      "EncountersResponse": {
+        "properties": {
+          "statementTable": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Statement"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementtable",
+            "description": "Only with ?compact=true: every distinct statement of the records, once. Absent otherwise."
+          },
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/Encounter"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch events API (public-global-encounters-events), cross-checked with AIS gap events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "start",
+          "end",
+          "truncated",
+          "total",
+          "events"
+        ],
+        "title": "EncountersResponse"
       },
       "EpistemicLabel": {
         "type": "string",
@@ -2703,6 +3982,254 @@
         ],
         "title": "Explanation"
       },
+      "Loitering": {
+        "properties": {
+          "statementIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementids",
+            "description": "Only with ?compact=true: this record's statements, in order, as indices into the response's statementTable (`statements` is then empty). Absent otherwise."
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "durationHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationhours"
+          },
+          "distanceKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancekm"
+          },
+          "speedKnots": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speedknots"
+          },
+          "shoreKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shorekm"
+          },
+          "highSeas": {
+            "type": "boolean",
+            "title": "Highseas"
+          },
+          "place": {
+            "type": "string",
+            "title": "Place"
+          },
+          "vesselId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselid"
+          },
+          "vesselName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselname"
+          },
+          "flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "vesselType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesseltype"
+          },
+          "metVessel": {
+            "type": "boolean",
+            "title": "Metvessel",
+            "description": "The same vessel had a recorded encounter within 24 h of loitering"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lat",
+          "lon",
+          "start",
+          "end",
+          "durationHours",
+          "distanceKm",
+          "speedKnots",
+          "shoreKm",
+          "highSeas",
+          "place",
+          "vesselId",
+          "vesselName",
+          "flag",
+          "vesselType",
+          "metVessel",
+          "statements"
+        ],
+        "title": "Loitering"
+      },
+      "LoiteringResponse": {
+        "properties": {
+          "statementTable": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Statement"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementtable",
+            "description": "Only with ?compact=true: every distinct statement of the records, once. Absent otherwise."
+          },
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/Loitering"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch events API (public-global-loitering-events), carriers and bunkers 20+ nm offshore"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "start",
+          "end",
+          "truncated",
+          "total",
+          "events"
+        ],
+        "title": "LoiteringResponse"
+      },
       "MetaResponse": {
         "properties": {
           "isDemoData": {
@@ -2948,6 +4475,21 @@
       },
       "OilSlick": {
         "properties": {
+          "statementIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementids",
+            "description": "Only with ?compact=true: this record's statements, in order, as indices into the response's statementTable (`statements` is then empty). Absent otherwise."
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -3015,6 +4557,14 @@
             },
             "type": "array",
             "title": "Statements"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/SlickCandidate"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "description": "Ranked candidate sources (Cerulean), best first"
           }
         },
         "type": "object",
@@ -3104,6 +4654,21 @@
       },
       "ProtectedFishingEvent": {
         "properties": {
+          "statementIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementids",
+            "description": "Only with ?compact=true: this record's statements, in order, as indices into the response's statementTable (`statements` is then empty). Absent otherwise."
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -3219,6 +4784,14 @@
               }
             ],
             "title": "Vesselid"
+          },
+          "areaIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Areaids",
+            "description": "WDPA ids (SITE_PID) of the no-take protected areas it was in"
           }
         },
         "type": "object",
@@ -3241,6 +4814,21 @@
       },
       "ProtectedFishingResponse": {
         "properties": {
+          "statementTable": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Statement"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementtable",
+            "description": "Only with ?compact=true: every distinct statement of the records, once. Absent otherwise."
+          },
           "isDemoData": {
             "type": "boolean",
             "title": "Isdemodata"
@@ -3307,8 +4895,97 @@
         ],
         "title": "ProtectedFishingResponse"
       },
+      "SlickCandidate": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank",
+            "description": "Cerulean's rank among this slick's candidate sources (1 = best match)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "VESSEL",
+              "DARK_VESSEL",
+              "INFRASTRUCTURE",
+              "UNKNOWN"
+            ],
+            "title": "Type"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "description": "MMSI for a vessel on AIS, Cerulean's detection id for a dark vessel, structure id for infrastructure"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "Cerulean's collated match score: higher is a better fit; only meaningful within one slick"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "wentDark": {
+            "type": "boolean",
+            "title": "Wentdark",
+            "description": "This MMSI switched AIS off (likely intentionally) within 48 h of the slick",
+            "default": false
+          },
+          "vesselName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vesselname",
+            "description": "Known from a matching AIS-off event, else looked up on demand"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "type",
+          "ref",
+          "score",
+          "url"
+        ],
+        "title": "SlickCandidate"
+      },
       "SlicksResponse": {
         "properties": {
+          "statementTable": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Statement"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statementtable",
+            "description": "Only with ?compact=true: every distinct statement of the records, once. Absent otherwise."
+          },
           "isDemoData": {
             "type": "boolean",
             "title": "Isdemodata"
@@ -3339,6 +5016,12 @@
             },
             "type": "array",
             "title": "Slicks"
+          },
+          "candidatesAvailable": {
+            "type": "boolean",
+            "title": "Candidatesavailable",
+            "description": "False if Cerulean's source matching could not be fetched this time",
+            "default": true
           },
           "start": {
             "anyOf": [
@@ -3678,6 +5361,124 @@
           "transmitsTo"
         ],
         "title": "VesselIdentity"
+      },
+      "VesselInsights": {
+        "properties": {
+          "isDemoData": {
+            "type": "boolean",
+            "title": "Isdemodata"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "title": "Fetchedat"
+          },
+          "vesselId": {
+            "type": "string",
+            "title": "Vesselid"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "iuuListedInPeriod": {
+            "type": "boolean",
+            "title": "Iuulistedinperiod"
+          },
+          "iuuTimesListed": {
+            "type": "integer",
+            "title": "Iuutimeslisted",
+            "description": "Times the vessel has appeared on an RFMO IUU vessel list, ever"
+          },
+          "fishingEvents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fishingevents"
+          },
+          "fishingInRfmoWithoutKnownAuthorisation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fishinginrfmowithoutknownauthorisation"
+          },
+          "fishingInNoTakeMpas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fishinginnotakempas"
+          },
+          "aisOffEvents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aisoffevents"
+          },
+          "coveragePct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coveragepct",
+            "description": "Share of the period with AIS positions"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/Statement"
+            },
+            "type": "array",
+            "title": "Statements"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Global Fishing Watch vessel insights API"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isDemoData",
+          "fetchedAt",
+          "vesselId",
+          "start",
+          "end",
+          "iuuListedInPeriod",
+          "iuuTimesListed",
+          "fishingEvents",
+          "fishingInRfmoWithoutKnownAuthorisation",
+          "fishingInNoTakeMpas",
+          "aisOffEvents",
+          "coveragePct",
+          "statements"
+        ],
+        "title": "VesselInsights"
       },
       "VesselPoint": {
         "properties": {

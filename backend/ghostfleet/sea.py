@@ -24,7 +24,9 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from .gfw import CACHE_ROOT, ROOT, UA, GFWError, _token, month_axis
+from .gfw import (CACHE_ROOT, ROOT, UA, UPSTREAM_BUDGET_S, BudgetExceeded, GFWError, _token, call_timeout, may_wait, month_axis,
+                  parallel, time_left, wait_lock)
+from .shared_cache import SharedCache
 
 GFW = "https://gateway.api.globalfishingwatch.org/v3"
 CERULEAN = "https://api.cerulean.skytruth.org/collections/public.slick_plus/items"
@@ -32,7 +34,9 @@ GAP_VESSEL_TYPES = ("FISHING", "CARGO", "CARRIER", "BUNKER", "OTHER")     # leav
 DEFAULT_DAYS = 30                     # period shown when the caller gives no dates
 MAX_SPAN_DAYS = 366
 GAP_MAX_PAGES = 15                    # 1,000 events a page
+PAGE_SIZE = 1000
 VESSEL_MAX_PAGES = 3
+EVENTS_TIMEOUT_S = 25                 # one page of 1,000 events is 0.5-1.5 MB and usually takes 1-2 s
 VESSEL_EVENT_DATASETS = ("public-global-fishing-events:latest", "public-global-port-visits-events:latest",
                          "public-global-encounters-events:latest", "public-global-loitering-events:latest",
                          "public-global-gaps-events:latest")
@@ -42,6 +46,7 @@ SLICK_MIN_CONFIDENCE = 0.9
 SLICK_SOURCES = {1: "VESSEL", 2: "INFRASTRUCTURE", 3: "DARK_VESSEL", 4: "NATURAL"}
 CERULEAN_SOURCES = "https://api.cerulean.skytruth.org/collections/public.source_plus/items"
 SLICK_MAX_CANDIDATES = 3           # Cerulean ranks every candidate source of a slick; the best few are kept
+SLICK_SOURCE_BATCH = 500           # slick ids per candidate-source query (keeps each URL a sane length)
 CANDIDATE_TYPE = {"VESSEL": "VESSEL", "DARK": "DARK_VESSEL", "INFRA": "INFRASTRUCTURE"}
 LANE_RGB = [19, 38, 59]                                     # chart ink
 LANE_RAMP_Z2 = [0, 500, 1200, 3000, 7000, 16000, 40000, 100000, 250000]   # vessel-hours per tile cell at zoom 2
@@ -55,7 +60,9 @@ LOITER_VESSEL_TYPES = ("CARRIER", "BUNKER")
 LOITER_MIN_SHORE_KM = 37.0            # 20 nautical miles: leaves out ships waiting at anchorages and off ports
 EVENT_MAX_PAGES = 8
 # Map layers served as vector tiles straight from GFW (they need the token, so they are proxied)
-CONTEXT_LAYERS = {"eez": "public-eez-areas", "infra": "public-fixed-infrastructure-filtered:latest"}
+# mpa: every WDPA marine protected area (features carry SITE_PID, NAME, DESIG; no no-take flag, so the map picks the
+# no-take ones by the area ids GFW tags on events)
+CONTEXT_LAYERS = {"eez": "public-eez-areas", "infra": "public-fixed-infrastructure-filtered:latest", "mpa": "public-mpa-all"}
 EFFORT_RGB = [196, 92, 0]
 EFFORT_RAMP_Z2 = [0, 20, 60, 150, 400, 1000, 2500, 6000, 15000]   # fishing hours per tile cell at zoom 2, for a 30-day period
 
@@ -89,31 +96,41 @@ class LayerNotBuilt(RuntimeError):
     """A layer that is precomputed by a script has not been built yet."""
 
 
-def _get(url: str, token: bool = False, method: str | None = None, timeout: float = 60, tries: int = 3,
+def _get(url: str, token: bool = False, method: str | None = None, timeout: float = 20, tries: int = 3,
          body: dict | None = None) -> bytes:
+    """One upstream call with retries. `timeout` is per attempt and is cut to what is left of the request's budget
+    (ghostfleet.gfw.upstream_budget); there is no pause after the last attempt, or when the budget cannot cover one."""
     h = {"User-Agent": UA, "Accept-Encoding": "gzip"}
     if token:
         h["Authorization"] = f"Bearer {_token()}"
     data = None
     if body is not None:
         data, h["Content-Type"] = json.dumps(body).encode(), "application/json"
-    last = None
+    host, last = url.split("/")[2], None
     for attempt in range(tries):
         try:
             req = urllib.request.Request(url, headers=h, method=method, data=data)
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=call_timeout(timeout)) as r:
                 raw = r.read()
                 return gzip.decompress(raw) if r.headers.get("Content-Encoding") == "gzip" else raw
         except urllib.error.HTTPError as e:
             if e.code in (400, 401, 403, 404, 422):
-                err = SeaSourceError(f"{url.split('/')[2]} refused the request (HTTP {e.code})")
+                err = SeaSourceError(f"{host} refused the request (HTTP {e.code})")
                 err.status = e.code
                 raise err from e
             last = e
-        except Exception as e:  # network hiccup
+        except BudgetExceeded:
+            raise
+        except Exception as e:  # network hiccup or a timed-out attempt
             last = e
-        time.sleep(2 * (attempt + 1))
-    raise SeaSourceError(f"{url.split('/')[2]} unreachable: {type(last).__name__}")
+        pause = 1.5 * (attempt + 1)
+        if attempt == tries - 1 or not may_wait(pause):
+            break
+        time.sleep(pause)
+    left = time_left()
+    if left is not None and left < 5:
+        raise BudgetExceeded(f"{host} did not answer within the {UPSTREAM_BUDGET_S:.0f} s allowed per request")
+    raise SeaSourceError(f"{host} unreachable: {type(last).__name__}")
 
 
 def _now() -> str:
@@ -138,6 +155,8 @@ def slim_gap(e: dict) -> dict:
             "shoreKm": num(dist.get("startDistanceFromShoreKm")), "positionsBefore": num(g.get("positions12HoursBeforeSat")),
             "intentional": bool(g.get("intentionalDisabling")),
             "inMpa": bool(reg.get("mpa")), "inNoTake": bool(reg.get("mpaNoTake") or reg.get("mpaNoTakePartial")),
+            "noTakeIds": [str(x) for x in reg.get("mpaNoTake") or []][:4],              # WDPA SITE_PIDs
+            "partNoTakeIds": [str(x) for x in reg.get("mpaNoTakePartial") or []][:4],
             "highSeas": bool(reg.get("highSeas"))}
 
 
@@ -225,31 +244,49 @@ def slim_vessel_event(e: dict) -> dict:
 
 
 class SeaWatch:
-    def __init__(self, cache_dir: Path | None = None, fresh_hours: float = 6.0):
+    def __init__(self, cache_dir: Path | None = None, fresh_hours: float = 6.0, shared: SharedCache | None | bool = True):
         self.cache_dir = cache_dir or CACHE_ROOT / "sea"
         self.fresh_s = fresh_hours * 3600
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
+        # shared=True: use the cross-instance cache if the environment configures one (see ghostfleet.shared_cache)
+        self.shared = SharedCache.from_env() if shared is True else (shared or None)
 
     def _cached(self, name: str, build, settled: bool = False) -> dict:
-        """Disk cache. `settled` = the period ended more than a week ago, so the answer no longer changes."""
+        """Disk cache, then the cache shared across instances (if configured), then upstream.
+        `settled` = the period ended more than a week ago, so the answer no longer changes."""
         path = self.cache_dir / f"{name}.json"
         with self._guard:
             lock = self._locks.setdefault(name, threading.Lock())
-        with lock:
+        wait_lock(lock)
+        try:
             if path.exists() and (settled or time.time() - path.stat().st_mtime < self.fresh_s):
                 return json.loads(path.read_text())
+            shared = self.shared.get(f"sea/{name}") if self.shared else None
+            if shared and (settled or time.time() - shared[0] < self.fresh_s):
+                self._write(path, shared[1])
+                return shared[1]
             try:
                 out = build()
-            except GFWError:
-                if path.exists():          # upstream down: serve the last good copy, still stamped with its fetch time
+            except GFWError:               # upstream down or too slow: serve the last good copy, stamped with its fetch time
+                if path.exists():
                     return json.loads(path.read_text())
+                if shared:
+                    return shared[1]
                 raise
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = path.with_suffix(f".{os.getpid()}.tmp")
-            tmp.write_text(json.dumps(out, separators=(",", ":")))
-            tmp.replace(path)
+            self._write(path, out)
+            if self.shared:                # kept well past freshness, so it can stand in when upstream is down
+                self.shared.put(f"sea/{name}", out, 90 * 86400 if settled else 7 * 86400)
             return out
+        finally:
+            lock.release()
+
+    @staticmethod
+    def _write(path: Path, out: dict) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(out, separators=(",", ":")))
+        tmp.replace(path)
 
     @staticmethod
     def _settled(end: str) -> bool:
@@ -257,37 +294,45 @@ class SeaWatch:
 
     # ---------- AIS switched off ----------
     def _fetch_gaps(self, start: str, end: str) -> dict:
-        q = {"datasets[0]": "public-global-gaps-events:latest", "start-date": start,
-             "end-date": (date.fromisoformat(end) + timedelta(days=1)).isoformat(), "gap-intentional-disabling": "true",
-             "sort": "-start", "limit": "1000"}
+        q = {"datasets[0]": "public-global-gaps-events:latest", "gap-intentional-disabling": "true"}
         q.update({f"vessel-types[{i}]": t for i, t in enumerate(GAP_VESSEL_TYPES)})
-        events, offset, truncated = [], 0, False
-        for page_no in range(GAP_MAX_PAGES):                  # newest first; stop once a page starts before the period
-            d = json.loads(_get(f"{GFW}/events?{urllib.parse.urlencode({**q, 'offset': str(offset)})}", token=True, timeout=90))
-            page = d.get("entries") or []
-            events += [slim_gap(e) for e in page if (e.get("start") or "")[:10] >= start]
-            offset = d.get("nextOffset")
-            if not page or not offset or (page[-1].get("start") or "")[:10] < start:
-                break
-            truncated = page_no == GAP_MAX_PAGES - 1
-        events = [e for e in events if e["lat"] is not None and e["lon"] is not None]
-        return {"fetchedAt": _now(), "start": start, "end": end, "truncated": truncated, "events": events}
+        # 30 days of gaps fit on one page, so only longer periods go on to fetch pages several at a time
+        return self._fetch_events(q, start, end, slim_gap, max_pages=GAP_MAX_PAGES, first_wave=1)
 
-    def _fetch_events(self, query: dict, start: str, end: str, slim) -> dict:
-        """Newest-first events of one GFW dataset that began in start..end (inclusive), up to EVENT_MAX_PAGES pages."""
+    def _fetch_events(self, query: dict, start: str, end: str, slim, max_pages: int = EVENT_MAX_PAGES,
+                      first_wave: int = 2, wave: int = 3) -> dict:
+        """Newest-first events of one GFW dataset that began in start..end (inclusive), up to `max_pages` pages.
+
+        Pages are fetched a wave at a time (`first_wave` pages, then `wave`), all at once: GFW's offsets step by the page
+        size, so the next pages' offsets are known before the current one arrives. Fetching stops after the first page
+        that reaches back before the period; pages fetched beyond it are dropped. A two-page answer costs one round trip.
+        """
         q = {**query, "start-date": start, "end-date": (date.fromisoformat(end) + timedelta(days=1)).isoformat(),
-             "sort": "-start", "limit": "1000"}
-        events, offset, truncated = [], 0, False
-        for page_no in range(EVENT_MAX_PAGES):
-            d = json.loads(_get(f"{GFW}/events?{urllib.parse.urlencode({**q, 'offset': str(offset)})}", token=True, timeout=90))
-            page = d.get("entries") or []
-            events += [slim(e) for e in page if (e.get("start") or "")[:10] >= start]   # GFW also returns events that only overlap
-            offset = d.get("nextOffset")
-            if not page or not offset or (page[-1].get("start") or "")[:10] < start:
-                break
-            truncated = page_no == EVENT_MAX_PAGES - 1
+             "sort": "-start", "limit": str(PAGE_SIZE)}
+
+        def page(offset: int) -> dict:
+            url = f"{GFW}/events?{urllib.parse.urlencode({**q, 'offset': str(offset)})}"
+            return json.loads(_get(url, token=True, timeout=EVENTS_TIMEOUT_S))
+
+        events, offset, fetched, done, n, steps_ok = [], 0, 0, False, first_wave, True
+        while not done and fetched < max_pages:
+            offsets = [offset + i * PAGE_SIZE for i in range(min(n, max_pages - fetched))]
+            pages = parallel(*[(lambda o=o: page(o)) for o in offsets])
+            for o, d in zip(offsets, pages):
+                fetched += 1
+                entries = d.get("entries") or []
+                events += [slim(e) for e in entries if (e.get("start") or "")[:10] >= start]   # GFW also returns events that only overlap
+                nxt = d.get("nextOffset")
+                if not entries or not nxt or (entries[-1].get("start") or "")[:10] < start:
+                    done = True
+                    break
+                offset = nxt
+                if nxt != o + PAGE_SIZE:   # not plain page steps after all: drop the rest of the wave, go one page at a time
+                    steps_ok = False
+                    break
+            n = wave if steps_ok else 1
         events = [e for e in events if e["lat"] is not None and e["lon"] is not None]
-        return {"fetchedAt": _now(), "start": start, "end": end, "truncated": truncated, "events": events}
+        return {"fetchedAt": _now(), "start": start, "end": end, "truncated": not done, "events": events}
 
     def encounters(self, start: str | None = None, end: str | None = None) -> dict:
         """Fishing vessels meeting carriers, support vessels, bunkers or tankers at sea (possible transshipment)."""
@@ -333,7 +378,7 @@ class SeaWatch:
 
         def build():
             try:
-                d = json.loads(_get(f"{GFW}/insights/vessels", token=True, method="POST", body=body, timeout=90))
+                d = json.loads(_get(f"{GFW}/insights/vessels", token=True, method="POST", body=body, timeout=EVENTS_TIMEOUT_S))
             except SeaSourceError as e:
                 if e.status in (404, 422):
                     raise LookupError(vessel_id) from e
@@ -349,7 +394,7 @@ class SeaWatch:
         if path.exists() and time.time() - path.stat().st_mtime < 30 * 86400:
             return path.read_bytes()
         try:
-            pbf = _get(f"{GFW}/datasets/{CONTEXT_LAYERS[layer]}/context-layers/{z}/{x}/{y}", token=True, timeout=60)
+            pbf = _get(f"{GFW}/datasets/{CONTEXT_LAYERS[layer]}/context-layers/{z}/{x}/{y}", token=True)
         except SeaSourceError as e:
             if e.status != 404:
                 raise
@@ -372,7 +417,7 @@ class SeaWatch:
         q = {"format": "PNG", "interval": "DAY" if days <= 31 else "MONTH", "datasets[0]": "public-global-fishing-effort:latest",
              "date-range": f"{start},{until}", "style": style}
         try:
-            png = _get(f"{GFW}/4wings/tile/heatmap/{z}/{x}/{y}?{urllib.parse.urlencode(q)}", token=True, timeout=60, tries=3)
+            png = _get(f"{GFW}/4wings/tile/heatmap/{z}/{x}/{y}?{urllib.parse.urlencode(q)}", token=True)
         except SeaSourceError as e:
             if e.status != 404:
                 raise
@@ -393,7 +438,8 @@ class SeaWatch:
         """Vessels that went dark, by the date the gap began (start..end inclusive; default: the last 30 days)."""
         if not (start and end):
             start, end = default_period()
-        return self._cached(f"gaps_{start}_{end}", lambda: self._fetch_gaps(start, end), self._settled(end))
+        # gaps2: the events carry the no-take area ids (older gaps_ caches do not)
+        return self._cached(f"gaps2_{start}_{end}", lambda: self._fetch_gaps(start, end), self._settled(end))
 
     # ---------- possible oil slicks ----------
     def _fetch_slicks(self, start: str, end: str) -> dict:
@@ -403,7 +449,7 @@ class SeaWatch:
              "filter": f"machine_confidence > {SLICK_MIN_CONFIDENCE} AND area > {SLICK_MIN_AREA_M2}",
              "properties": "id,slick_timestamp,machine_confidence,area,length,source_type_1_ids,source_type_2_ids,"
                            "source_type_3_ids,slick_url"}
-        d = json.loads(_get(f"{CERULEAN}?{urllib.parse.urlencode(q)}", timeout=90))
+        d = json.loads(_get(f"{CERULEAN}?{urllib.parse.urlencode(q)}", timeout=EVENTS_TIMEOUT_S))
         slicks = []
         for f in d.get("features", []):
             p = f.get("properties") or {}
@@ -430,14 +476,16 @@ class SeaWatch:
     def _fetch_slick_sources(self, slick_ids: list[str]) -> dict[str, list[dict]]:
         """Cerulean's ranked candidate sources (AIS vessels, radar-only 'dark' vessels, offshore structures) per slick."""
         out: dict[str, list[dict]] = {}
-        for i in range(0, len(slick_ids), 500):                  # keeps each URL a sane length
-            chunk = [x for x in slick_ids[i:i + 500] if x.isdigit()]
-            if not chunk:
-                continue
+        n = SLICK_SOURCE_BATCH
+        chunks = [c for c in ([x for x in slick_ids[i:i + n] if x.isdigit()] for i in range(0, len(slick_ids), n)) if c]
+
+        def batch(chunk: list[str]) -> dict:
             q = {"f": "geojson", "limit": "2000", "bbox-only": "true", "filter-lang": "cql2-text",
                  "filter": f"source_rank <= {SLICK_MAX_CANDIDATES} AND slick_id IN ({','.join(chunk)})",
                  "properties": "slick_id,mmsi_or_structure_id,source_type,source_collated_score,source_rank,source_url"}
-            d = json.loads(_get(f"{CERULEAN_SOURCES}?{urllib.parse.urlencode(q)}", timeout=90))
+            return json.loads(_get(f"{CERULEAN_SOURCES}?{urllib.parse.urlencode(q)}", timeout=EVENTS_TIMEOUT_S))
+
+        for d in parallel(*[(lambda c=c: batch(c)) for c in chunks]):     # the batches are independent: fetch them at once
             for f in d.get("features", []):
                 p = f.get("properties") or {}
                 out.setdefault(str(p.get("slick_id")), []).append({
@@ -456,18 +504,24 @@ class SeaWatch:
     # ---------- one ship ----------
     def _fetch_vessel(self, vessel_id: str, start: str, end: str) -> dict:
         vid = urllib.parse.quote(vessel_id, safe="")
-        try:
-            ident = json.loads(_get(f"{GFW}/vessels/{vid}?{urllib.parse.urlencode({'dataset': IDENTITY})}", token=True))
+        q = {"vessels[0]": vessel_id, "start-date": start, "end-date": (date.fromisoformat(end) + timedelta(days=1)).isoformat(),
+             "sort": "+start", "limit": "1000"}
+        q.update({f"datasets[{i}]": ds for i, ds in enumerate(VESSEL_EVENT_DATASETS)})
+
+        def events_page(offset) -> dict:
+            return json.loads(_get(f"{GFW}/events?{urllib.parse.urlencode({**q, 'offset': str(offset)})}", token=True,
+                                   timeout=EVENTS_TIMEOUT_S))
+        try:   # identity and the first page of events at once
+            ident, first = parallel(
+                lambda: json.loads(_get(f"{GFW}/vessels/{vid}?{urllib.parse.urlencode({'dataset': IDENTITY})}", token=True)),
+                lambda: events_page(0))
         except SeaSourceError as e:
             if e.status == 404:
                 raise LookupError(vessel_id) from e
             raise
-        q = {"vessels[0]": vessel_id, "start-date": start, "end-date": (date.fromisoformat(end) + timedelta(days=1)).isoformat(),
-             "sort": "+start", "limit": "1000"}
-        q.update({f"datasets[{i}]": ds for i, ds in enumerate(VESSEL_EVENT_DATASETS)})
         events, offset, truncated = [], 0, False
         for page_no in range(VESSEL_MAX_PAGES):
-            d = json.loads(_get(f"{GFW}/events?{urllib.parse.urlencode({**q, 'offset': str(offset)})}", token=True, timeout=90))
+            d = first if page_no == 0 else events_page(offset)
             page = d.get("entries") or []
             events += [slim_vessel_event(e) for e in page]
             offset = d.get("nextOffset")
@@ -485,7 +539,7 @@ class SeaWatch:
 
     def search(self, query: str) -> list[dict]:
         q = {"query": query, "datasets[0]": IDENTITY, "limit": "12"}
-        d = json.loads(_get(f"{GFW}/vessels/search?{urllib.parse.urlencode(q)}", token=True, timeout=45))
+        d = json.loads(_get(f"{GFW}/vessels/search?{urllib.parse.urlencode(q)}", token=True))
         out = []
         for e in d.get("entries") or []:
             ident = slim_identity(e)
@@ -515,7 +569,7 @@ class SeaWatch:
         q = {"format": "PNG", "interval": "MONTH", "datasets[0]": "public-global-presence:latest",
              "date-range": f"{month}-01,{end}", "style": style}
         try:
-            png = _get(f"{GFW}/4wings/tile/heatmap/{z}/{x}/{y}?{urllib.parse.urlencode(q)}", token=True, timeout=60, tries=4)
+            png = _get(f"{GFW}/4wings/tile/heatmap/{z}/{x}/{y}?{urllib.parse.urlencode(q)}", token=True, tries=4)
         except SeaSourceError as e:
             if e.status != 404:
                 raise
