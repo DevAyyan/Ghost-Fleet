@@ -276,9 +276,8 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
       m.addSource("effort", { type: "raster", tileSize: 256, maxzoom: 6, tiles: [api.effortTiles(first.period.start, first.period.end)],
                               attribution: "Global Fishing Watch" });
       m.addLayer({ id: "effort", type: "raster", source: "effort", layout: { visibility: "none" }, paint: { "raster-opacity": 0.85 } });
-      // sea borders: EEZ polygons, drawn as a dashed edge only; the invisible fill lets a click name the zone
+      // sea borders: EEZ polygons, drawn as a dashed edge only (no click popup)
       m.addSource("eez", { type: "vector", tiles: [api.contextTiles("eez")], maxzoom: 9, attribution: "Marine Regions (VLIZ)" });
-      m.addLayer({ id: "eez-fill", type: "fill", source: "eez", "source-layer": "main", paint: { "fill-color": BORDER, "fill-opacity": 0 } });
       m.addLayer({ id: "eez-line", type: "line", source: "eez", "source-layer": "main",
                    paint: { "line-color": BORDER, "line-opacity": 0.75, "line-dasharray": [3, 2],
                             "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.6, 6, 1.4] } });
@@ -491,11 +490,6 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
             return;
           }
         }
-
-        if (m.getLayoutProperty("eez-line", "visibility") !== "none") {   // whose waters is this?
-          const z = m.queryRenderedFeatures(e.point, { layers: ["eez-fill"] })[0]?.properties as { GEONAME?: string } | undefined;
-          say(e, z?.GEONAME ? `${z.GEONAME}.` : "High seas: outside every country's exclusive economic zone.");
-        }
       });
       setReady(true);
     };
@@ -572,7 +566,7 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     show("turnon-zone-fill", visible.turnOns);
     show("turnon-zone-line", visible.turnOns);
     show("hull-fill", visible.changes); show("hull-line", visible.changes);
-    show("effort", visible.effort); show("eez-fill", visible.borders); show("eez-line", visible.borders);
+    show("effort", visible.effort); show("eez-line", visible.borders);
     show("infra-pt", visible.infra); show("encounter-pt", visible.encounters); show("loiter-pt", visible.loitering);
     show("closure-pt", visible.closures);
   }, [ready, visible, highlightIllegalZones]);

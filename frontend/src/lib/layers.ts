@@ -9,7 +9,7 @@ export const LAYERS: LayerDef[] = [
     about: "Where ships spend their time: the density of AIS positions over the last month of the period. The dark threads are the routes most ships follow.",
     source: "Global Fishing Watch, AIS vessel presence" },
   { id: "borders", name: "Sea borders", on: true,
-    about: "Each country's exclusive economic zone (EEZ): the waters, usually out to 200 nautical miles, where it alone may license fishing. Click the sea to see whose waters it is. Lines between neighbours include disputed and provisional ones.",
+    about: "Each country's exclusive economic zone (EEZ): the waters, usually out to 200 nautical miles, where it alone may license fishing. Lines between neighbours include disputed and provisional ones.",
     source: "Marine Regions EEZ boundaries (Flanders Marine Institute), via Global Fishing Watch" },
   { id: "aisOff", name: "AIS switched off", on: true,
     about: "Vessels whose AIS signal stopped during the period while reception was good, which Global Fishing Watch classes as likely switched off on purpose. Fishing-gear buoys are left out. Open one to see the ship and its path.",

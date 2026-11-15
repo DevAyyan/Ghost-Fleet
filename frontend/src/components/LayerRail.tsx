@@ -234,7 +234,7 @@ export function LayerRail(p: Props) {
           }} />
       </>
     ) : <Pending r={slicks} what="oil slicks" />,
-    borders: () => <p className="muted layer-empty">Dashed lines mark where one country's waters end. Click the sea to name the zone. Solid shading is not drawn so the data stays readable.</p>,
+    borders: () => <p className="muted layer-empty">Dashed lines mark where one country's waters end. Solid shading is not drawn so the data stays readable.</p>,
     encounters: () => encounters.data ? (
       <>
         {encounters.data.truncated && <p className="muted layer-empty">This period has more meetings than can be fetched; the newest are used.</p>}
