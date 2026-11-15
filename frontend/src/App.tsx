@@ -47,7 +47,7 @@ export default function App() {
     const layer = initial.selection && LAYER_OF[initial.selection.kind];
     return layer ? { ...DEFAULT_VISIBLE, [layer]: true } : DEFAULT_VISIBLE;
   });
-  const [open, setOpen] = useState<LayerId | null>(() => (initial.selection ? LAYER_OF[initial.selection.kind] ?? null : "hotspots"));
+  const [open, setOpen] = useState<LayerId | null>(() => (initial.selection ? LAYER_OF[initial.selection.kind] ?? null : null));
   const [spot, setSpot] = useState<{ lon: number; lat: number; key: string } | null>(null);   // a place picked inside the ship panel
   const [showNoTakeAreas, setShowNoTakeAreas] = useState(true);
   const [noTakeOnly, setNoTakeOnly] = useState(false);

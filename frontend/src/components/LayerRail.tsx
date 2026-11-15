@@ -1,10 +1,11 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { api, type ApiError } from "../api/client";
 import type { AisOffResponse, ClosuresResponse, EncountersResponse, LoiteringResponse, MetaResponse, ProtectedFishingResponse, SlicksResponse } from "../api/types";
 import { useResource, type Resource } from "../hooks/useResource";
 import { formatDateTime, formatDay, formatMonth, formatP, formatSpan, humanCellId, vesselWord } from "../lib/format";
 import type { IconName } from "../lib/icons";
-import { EARLIEST, LAYERS, LAYER_GROUPS, daysAgo, lastDays, periodProblem, spanDays, type LayerId, type Period, type Selection } from "../lib/layers";
+import { rankLeads, type Lead } from "../lib/leads";
+import { EARLIEST, LAYERS, LAYER_GROUPS, daysAgo, lastDays, periodProblem, spanDays, type LayerId, type Period, type SeaKind, type Selection } from "../lib/layers";
 import type { ShipOptions } from "../lib/ship3d";
 import { Glyph, Ship } from "./Glyph";
 import { Ship3d } from "./Ship3d";
@@ -106,6 +107,42 @@ function ShipSearch({ selection, onSelect }: Pick<Props, "selection" | "onSelect
   );
 }
 
+/** What each kind of lead is, as its map symbol and a few words. */
+const LEAD_GLYPH: Partial<Record<SeaKind, IconName>> = { aisOff: "ghost-fishing", turnOn: "fleet", fishing: "fish", encounter: "meet-carrier", slick: "slick" };
+const LEAD_WORD: Partial<Record<SeaKind, string>> = {
+  aisOff: "AIS switched off", turnOn: "Went dark together", fishing: "Fishing in a protected area", encounter: "Meeting at sea", slick: "Possible oil slick",
+};
+
+/** The strongest leads of the period across every layer: the place to start. Selecting one opens its case and draws its layer. */
+function TopLeads({ leads, loading, selection, onSelect }: { leads: Lead[]; loading: boolean } & Pick<Props, "selection" | "onSelect">) {
+  return (
+    <section className="leads" aria-labelledby="leads-title">
+      <h3 id="leads-title" className="leads-title">Start here: the strongest leads</h3>
+      <p className="leads-note">Ranked by what makes each stand out, shown under it. Select one to open its case.</p>
+      {!leads.length && loading && <Skeleton label="Finding the strongest leads" lines={3} height="3rem" />}
+      {!leads.length && !loading && <p className="muted layer-empty">Nothing stands out in this period. Try a longer one, or browse the layers below.</p>}
+      {leads.length > 0 && (
+        <ol className="feed leads-list" aria-label="Strongest leads, strongest first">
+          {leads.map((l) => (
+            <li key={`${l.kind}:${l.id}`}>
+              <button type="button" className="feed-btn lead-btn" aria-current={selection?.kind === l.kind && selection.id === l.id}
+                onClick={() => onSelect({ kind: l.kind, id: l.id })}>
+                {LEAD_GLYPH[l.kind] && <Glyph name={LEAD_GLYPH[l.kind]!} size={26} className="lead-sym" />}
+                <span className="lead-text">
+                  <span className="lead-kind">{LEAD_WORD[l.kind]}</span>
+                  <span className="feed-title">{l.title}</span>
+                  <span className="feed-meta">{l.what}</span>
+                  <span className="lead-why">{l.why.map((w) => <span key={w}>{w}</span>)}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 /** Layers drawn with a chart symbol show that same symbol in the legend; the rest keep a swatch of their colour or line. */
 const LAYER_GLYPH: Partial<Record<LayerId, IconName>> = {
   aisOff: "ghost-fishing", turnOns: "fleet", encounters: "meet-carrier", loitering: "wait-carrier", fishing: "fish", slicks: "slick", infra: "platform",
@@ -190,6 +227,12 @@ export function LayerRail(p: Props) {
   const filteredFishing = fishing.data?.events
     ? (noTakeOnly ? fishing.data.events.filter((e) => e.fullNoTake) : fishing.data.events)
     : [];
+
+  const leads = useMemo(() => rankLeads({
+    aisOff: aisOff.data?.events, turnOns: aisOff.data?.turnOnClusters, fishing: fishing.data?.events,
+    encounters: encounters.data?.events, slicks: slicks.data?.slicks,
+  }), [aisOff.data, fishing.data, encounters.data, slicks.data]);
+  const leadsLoading = [aisOff, fishing, slicks].some((r) => r.status === "loading");
 
   const counts: Record<LayerId, ReactNode> = {
     lanes: null,
@@ -341,6 +384,8 @@ export function LayerRail(p: Props) {
       </div>
       <div className="rail-body">
         <ShipSearch selection={selection} onSelect={onSelect} />
+        <TopLeads leads={leads} loading={leadsLoading} selection={selection} onSelect={onSelect} />
+        <h3 className="rail-section">Map layers</h3>
         {LAYER_GROUPS.map((g) => (
           <section key={g.id} className="layer-group" aria-labelledby={`layer-group-${g.id}`}>
             <h3 id={`layer-group-${g.id}`} className="layer-group-name">{g.name}</h3>
