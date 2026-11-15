@@ -49,7 +49,7 @@ export default function App() {
   });
   const [open, setOpen] = useState<LayerId | null>(() => (initial.selection ? LAYER_OF[initial.selection.kind] ?? null : "hotspots"));
   const [spot, setSpot] = useState<{ lon: number; lat: number; key: string } | null>(null);   // a place picked inside the ship panel
-  const [highlightIllegalZones, setHighlightIllegalZones] = useState(true);
+  const [showNoTakeAreas, setShowNoTakeAreas] = useState(true);
   const [noTakeOnly, setNoTakeOnly] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
   // the slick a ship was opened from, as one of its candidate sources: the map links the two
@@ -122,7 +122,7 @@ export default function App() {
           encounters={encounters} loitering={loitering} closures={closures}
           period={period} onPeriod={changePeriod} lanesMonth={lanesMonth}
           nightDay={imageDay(period, 3)} chlDay={imageDay(period, 3)}
-          highlightIllegalZones={highlightIllegalZones} onToggleIllegalZones={setHighlightIllegalZones}
+          showNoTakeAreas={showNoTakeAreas} onToggleNoTakeAreas={setShowNoTakeAreas}
           noTakeOnly={noTakeOnly} onToggleNoTakeOnly={setNoTakeOnly} />
 
         <section className="map-wrap" aria-label="Map">
@@ -139,7 +139,7 @@ export default function App() {
             lanesMonth={lanesMonth} nightDay={imageDay(period, 3)} chlDay={imageDay(period, 3)}
             track={selection?.kind === "vessel" ? vessel.data : undefined}
             slickLink={selection?.kind === "vessel" ? slickLink?.slick ?? null : null}
-            highlightIllegalZones={highlightIllegalZones} noTakeOnly={noTakeOnly} />
+            showNoTakeAreas={showNoTakeAreas} noTakeOnly={noTakeOnly} />
           </ErrorBoundary>
         </section>
 

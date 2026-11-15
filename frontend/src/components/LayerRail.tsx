@@ -29,8 +29,8 @@ interface Props {
   lanesMonth: string | null;
   nightDay: string;
   chlDay: string;
-  highlightIllegalZones: boolean;
-  onToggleIllegalZones: (v: boolean) => void;
+  showNoTakeAreas: boolean;
+  onToggleNoTakeAreas: (v: boolean) => void;
   noTakeOnly: boolean;
   onToggleNoTakeOnly: (v: boolean) => void;
 }
@@ -123,6 +123,24 @@ function Key({ items, note }: { items: [IconName | ShipOptions, string][]; note?
   );
 }
 
+/** A protected area as the map draws it: hatched with a solid edge where all fishing is banned, dashed where part of it is. */
+function ZoneSwatch({ full }: { full: boolean }) {
+  const id = `hatch-${full ? "full" : "part"}`;
+  return (
+    <svg className="zone-swatch" width="26" height="20" viewBox="0 0 26 20" aria-hidden="true">
+      <defs>
+        <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" strokeWidth="1.6" strokeOpacity="0.6" />
+        </pattern>
+      </defs>
+      <rect x="1.5" y="1.5" width="23" height="17" rx="2" fill="currentColor" fillOpacity={full ? 0.12 : 0.07} />
+      {full && <rect x="1.5" y="1.5" width="23" height="17" rx="2" fill={`url(#${id})`} />}
+      <rect x="1.5" y="1.5" width="23" height="17" rx="2" fill="none" stroke="currentColor" strokeWidth={full ? 2 : 1.4}
+        strokeDasharray={full ? undefined : "3 2"} />
+    </svg>
+  );
+}
+
 const SOURCE_WORD = { VESSEL: "a vessel on AIS", INFRASTRUCTURE: "offshore infrastructure", DARK_VESSEL: "a vessel not on AIS",
                       NATURAL: "a natural seep", UNKNOWN: "no source matched" } as const;
 const LIST_MAX = 40;
@@ -167,7 +185,7 @@ function Pending({ r, what }: { r: Resource<unknown>; what: string }) {
 export function LayerRail(p: Props) {
   const { meta, visible, onToggle, open, onOpen, selection, onSelect, aisOff, slicks, fishing, encounters, loitering, closures,
           period, onPeriod, lanesMonth, nightDay, chlDay,
-          highlightIllegalZones, onToggleIllegalZones, noTakeOnly, onToggleNoTakeOnly } = p;
+          showNoTakeAreas, onToggleNoTakeAreas, noTakeOnly, onToggleNoTakeOnly } = p;
 
   const filteredFishing = fishing.data?.events
     ? (noTakeOnly ? fishing.data.events.filter((e) => e.fullNoTake) : fishing.data.events)
@@ -222,29 +240,33 @@ export function LayerRail(p: Props) {
     ) : <Pending r={aisOff} what="joint dark operations" />,
     fishing: () => fishing.data ? (
       <>
+        <ul className="key zone-key" aria-label="What the map shows">
+          <li><ZoneSwatch full />No fishing at all: a no-take protected area</li>
+          <li><ZoneSwatch full={false} />No fishing in part of it: a zone inside is no-take</li>
+          <li><Ship3d size={52} heading={60} kind="fishing" hull="#a3271b" />A vessel that moved as if fishing inside one</li>
+          <li className="key-note">Point at an area on the map to read its rule; click its label to zoom in. A vessel inside is a lead to check against the area’s permits, never a finding.</li>
+        </ul>
         <div className="zone-filter">
           <label>
-            <input type="checkbox" checked={highlightIllegalZones} onChange={(e) => onToggleIllegalZones(e.target.checked)} />
-            Outline the protected areas fished in
+            <input type="checkbox" checked={showNoTakeAreas} onChange={(e) => onToggleNoTakeAreas(e.target.checked)} />
+            Show the protected areas on the map
           </label>
-          {highlightIllegalZones && (
-            <div className="zone-filter-which" role="group" aria-label="Which protected areas">
-              <label>
-                <input type="radio" name="illegalFilter" checked={!noTakeOnly} onChange={() => onToggleNoTakeOnly(false)} />
-                All protected areas ({fishing.data.events.length})
-              </label>
-              <label>
-                <input type="radio" name="illegalFilter" checked={noTakeOnly} onChange={() => onToggleNoTakeOnly(true)} />
-                Strict no-take only ({fishing.data.events.filter((e) => e.fullNoTake).length})
-              </label>
-            </div>
-          )}
+          <div className="zone-filter-which" role="group" aria-label="Which records to show">
+            <span className="muted">Show vessels in</span>
+            <label>
+              <input type="radio" name="noTakeFilter" checked={!noTakeOnly} onChange={() => onToggleNoTakeOnly(false)} />
+              any of these areas ({fishing.data.events.length})
+            </label>
+            <label>
+              <input type="radio" name="noTakeFilter" checked={noTakeOnly} onChange={() => onToggleNoTakeOnly(true)} />
+              only where all fishing is banned ({fishing.data.events.filter((e) => e.fullNoTake).length})
+            </label>
+          </div>
         </div>
-        <Key items={[[{ kind: "fishing", hull: "#a3271b" }, "A vessel that moved as if fishing"]]} note="No-take protected areas, where all fishing is banned, are outlined in green: a solid edge where the whole area is no-take, a dashed one where only a zone inside it is. Click an area for its name." />
         <p className="muted layer-empty">This layer is built a day at a time. Days checked so far: {formatDay(fishing.data.days[0])} to {formatDay(fishing.data.days[fishing.data.days.length - 1])} ({fishing.data.scanned.toLocaleString()} apparent-fishing events).</p>
         <Rows items={filteredFishing} kind="fishing" selection={selection} onSelect={onSelect} label="Apparent fishing inside marine protected areas"
           title={(f) => <Ship name={f.vesselName} type={f.vesselType ?? "fishing"} />}
-          meta={(f) => `Flag ${f.flag ?? "unknown"}. ${f.place}, ${formatDay(f.start)}${f.durationHours ? `, about ${formatSpan(f.durationHours)}` : ""}. ${f.fullNoTake ? "Strict no-take area." : "Partly no-take area."}`} />
+          meta={(f) => `Flag ${f.flag ?? "unknown"}. ${f.place}, ${formatDay(f.start)}${f.durationHours ? `, about ${formatSpan(f.durationHours)}` : ""}. ${f.fullNoTake ? "All fishing banned there." : "Fishing banned in part of that area."}`} />
       </>
     ) : <Pending r={fishing} what="fishing in no-take areas" />,
     slicks: () => slicks.data ? (

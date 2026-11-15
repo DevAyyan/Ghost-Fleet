@@ -228,8 +228,18 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 .cluster-label[data-dir="DECREASING"] { color: var(--shelf); }
 .cluster-label[data-kind="hotspot"] { color: #780a50; font-size: var(--fs-xs); }
 .cluster-label[data-kind="turnOn"] { color: #0284c7; border-color: #0284c7; font-weight: 700; font-size: var(--fs-xs); }
-.illegal-zone-label { font: 700 var(--fs-xs)/1 var(--sans); white-space: nowrap; padding: 3px var(--s-2); background: var(--paper); color: var(--danger);
-  border: 1.5px solid var(--danger); border-radius: var(--r-1); pointer-events: none; }
+/* a no-take area's label: the rule first, then the area's official name, then what the records show */
+.zone-label { display: grid; justify-items: start; gap: 1px; max-width: 24ch; padding: 4px var(--s-2) 5px; text-align: left; cursor: pointer;
+  font: 400 var(--fs-xs)/1.25 var(--sans); color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--notake); border-left-width: 4px; border-radius: var(--r-1); box-shadow: 0 1px 3px rgb(0 0 0 / 0.18); }
+.zone-label b { font-weight: 700; color: var(--notake); text-transform: uppercase; letter-spacing: 0.04em; }
+.zone-label[data-full="false"] { border-style: dashed; border-left-style: solid; }
+.zone-label .zone-name { font-weight: 600; }
+.zone-label .zone-name:empty { display: none; }
+.zone-label .zone-what { color: var(--sounding); }
+.zone-label:hover, .zone-label:focus-visible { background: var(--card); }
+.map[data-far="true"] .zone-label .zone-name, .map[data-far="true"] .zone-label .zone-what { display: none; }   /* far out: just the rule */
+.zone-key .zone-swatch { flex: none; margin: 0 13px; color: var(--notake); }
 .cluster-label[aria-current="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
 /* ---------- case file (drawer) ---------- */
@@ -420,7 +430,7 @@ dialog.modal::backdrop { background: rgb(19 38 59 / 0.45); }
 .ship3d-own { z-index: 20000 !important; cursor: default; }
 .ship3d-own svg polygon { pointer-events: none; }
 .map[data-tracking="true"] .ship3d:not(.ship3d-own) { opacity: 0.3; }
-.cluster-label, .illegal-zone-label, .gap-label, .end-label { z-index: 30000; }
+.cluster-label, .zone-label, .gap-label, .end-label { z-index: 30000; }
 
 /* ---------- showing and hiding the layer panel ---------- */
 .rail-toggle { position: absolute; z-index: 2; top: var(--s-4); left: var(--s-4); border-color: var(--ink); background: var(--paper); }

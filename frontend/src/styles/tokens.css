@@ -27,6 +27,7 @@
   --warn: #8a5a00;           /* annotations such as the Sentinel-1B outage */
   --ok: #1f6b4a;
   --danger: #a3271b;
+  --notake: #2e7d32;         /* no-take protected areas (NOTAKE in lib/icons.ts) */
   --demo-bg: #ffe066;
   --demo-text: #2b2100;
 
@@ -66,6 +67,7 @@
   --warn: #f0c36b;
   --ok: #7fd3ad;
   --danger: #ff9d8f;
+  --notake: #7cc47f;
 
   color: var(--ink);
   color-scheme: dark;        /* native date pickers, radios and scrollbars follow */
