@@ -55,3 +55,14 @@ Changes, in order:
 Mask offshore platforms and gas flares.
 Treat “lights don’t agree” as “no confirmation”, never as a refutation, because most vessels are unlit.
 Label it clearly as supporting evidence, since this is not a vessel detector.
+
+# Judging Criterion:
+Score against the judging guide (1–5 each)
+Criterion	Score	Why
+- Impact	3.5	A real problem, with a strong local angle in Pakistan and a working public app. There is no named user or pilot yet, so a partner would raise this.
+- Creativity	4	MSDI, the disprove engine, the correction waterfall and the epistemic labels are distinctive. Satellite-versus-AIS comparison is not new on its own.
+- Validity	4.5	Tested statistics, a design that catches its own artifacts, real data and a deployed app. Held back by single-sensor confidence and the uncorrected declines.
+- Relevance	3	The trend-detective theme fits well, but NASA is a small part: only POWER wind is in the statistics, and night lights and chlorophyll are imagery. This is your weakest score.
+- Presentation	3.5 now, 4.5 possible	The story and the live app are strong. The deck is text-first with no images, and the slides are untested.
+
+Overall: about 3.7 out of 5. The cheapest way to raise Relevance is to say clearly, as slide 4 does, what NASA does and does not contribute. Adding NASA chlorophyll for the Gulf of Oman would help most, and a recorded screen demo helps Presentation
