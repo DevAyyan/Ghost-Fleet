@@ -90,10 +90,8 @@ export default function App() {
     }
   }, []);
   const toggle = useCallback((id: LayerId) => setVisible((v) => ({ ...v, [id]: !v[id] })), []);
-  const openLayer = useCallback((id: LayerId | null) => {
-    setOpen(id);
-    if (id) setVisible((v) => (v[id] ? v : { ...v, [id]: true }));   // opening a layer also draws it
-  }, []);
+  // opening a layer only shows its notes and records: the eye beside it alone decides whether it is drawn
+  const openLayer = useCallback((id: LayerId | null) => setOpen(id), []);
 
   const seaItem = useMemo<SeaRecord | null>(() => {
     if (!selection) return null;

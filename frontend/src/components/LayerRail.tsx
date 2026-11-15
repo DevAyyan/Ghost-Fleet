@@ -109,6 +109,16 @@ function ShipSearch({ selection, onSelect }: Pick<Props, "selection" | "onSelect
   );
 }
 
+/** Whether a layer is drawn: an open eye when it is, a struck-through one when it is not. */
+function Eye({ open }: { open: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M1.8 10S5 4.5 10 4.5 18.2 10 18.2 10 15 15.5 10 15.5 1.8 10 1.8 10Z" />
+      {open ? <circle cx="10" cy="10" r="2.6" fill="currentColor" /> : <path d="M3.5 16.5 16.5 3.5" />}
+    </svg>
+  );
+}
+
 /** What each kind of lead is, as its map symbol and a few words. */
 const LEAD_GLYPH: Partial<Record<SeaKind, IconName>> = { aisOff: "ghost-fishing", turnOn: "fleet", fishing: "fish", encounter: "meet-carrier", slick: "slick" };
 const LEAD_WORD: Partial<Record<SeaKind, string>> = {
@@ -374,8 +384,10 @@ export function LayerRail(p: Props) {
                 return (
                   <li key={l.id} className="layer" data-open={isOpen} data-on={visible[l.id]}>
                     <div className="layer-row">
-                      <input type="checkbox" id={`layer-${l.id}`} checked={visible[l.id]} onChange={() => onToggle(l.id)}
-                        aria-label={`Show ${l.name} on the map`} />
+                      <button type="button" className="layer-eye" aria-pressed={visible[l.id]} onClick={() => onToggle(l.id)}
+                        aria-label={`Show ${l.name} on the map`} title={visible[l.id] ? "On the map: select to hide" : "Hidden: select to show on the map"}>
+                        <Eye open={visible[l.id]} />
+                      </button>
                       <LayerSwatch id={l.id} />
                       <button type="button" className="layer-name" aria-expanded={isOpen} aria-controls={`layer-detail-${l.id}`}
                         onClick={() => onOpen(isOpen ? null : l.id)}>
