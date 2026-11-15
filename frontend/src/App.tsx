@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api/client";
 import { CellDrawer } from "./components/CellDrawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -15,8 +15,10 @@ import type { OilSlick } from "./api/types";
 import { useResource } from "./hooks/useResource";
 import { rankLeads } from "./lib/leads";
 import { ChangeSpanContext, normalSpan, spanQuery, type ChangeSpan } from "./lib/span";
-import { buildTour, type TourStep } from "./lib/tour";
+import { caseTour, type StepShown, type Tour, type TourData, type TourView } from "./lib/tour";
+import { THEMED_TOURS } from "./lib/tours";
 import { CaseTour } from "./components/CaseTour";
+import { TourPanel } from "./components/TourPanel";
 import { DEFAULT_VISIBLE, imageDay, lastDays, monthsIn, periodProblem, type LayerId, type Period, type Selection } from "./lib/layers";
 
 const KINDS = ["event", "cell", "vessel", "aisOff", "hotspot", "turnOn", "slick", "fishing", "encounter", "loitering", "closure"] as const;
@@ -135,19 +137,70 @@ export default function App() {
     encounters: encounters.data?.events, slicks: slicks.data?.slicks,
   }), [aisOff.data, fishing.data, encounters.data, slicks.data]);
   const leadsLoading = [aisOff, fishing, slicks].some((r) => r.status === "loading");
-  const [tour, setTour] = useState<{ steps: TourStep[]; at: number } | null>(null);
   const tourLead = leads.find((l) => l.vesselId) ?? leads[0];
-  const startTour = tourLead ? () => {
-    const steps = buildTour(tourLead, lookup({ kind: tourLead.kind, id: tourLead.id })?.record.statements ?? []);
-    setTour({ steps, at: 0 });
-    select(steps[0].sel);
-  } : undefined;
-  const tourStep = (at: number) => {
-    if (!tour || at < 0 || at >= tour.steps.length) return;
-    setTour({ ...tour, at });
-    select(tour.steps[at].sel);
+
+  // ---------- guided tours ----------
+  const [toursOpen, setToursOpen] = useState(false);
+  // n counts every step taken, so going back to a step moves the camera there again
+  const [tour, setTour] = useState<{ tour: Tour; at: number; n: number } | null>(null);
+  const [camera, setCamera] = useState<{ view: TourView; key: string } | null>(null);
+  // the layers and filters from before the tour: put back when it ends
+  const saved = useRef<{ visible: Record<LayerId, boolean>; noTakeOnly: boolean; showNoTakeAreas: boolean } | null>(null);
+  const applied = useRef<string | null>(null);
+  const pending = (r: { status: string }) => r.status !== "success" && r.status !== "error";
+  const tourData = useMemo<TourData>(() => ({
+    aisOff: aisOff.data, fishing: fishing.data?.events, slicks: slicks.data?.slicks, events: events.data?.data, cells: cells.data?.cells,
+    loading: { aisOff: pending(aisOff), fishing: pending(fishing), slicks: pending(slicks), changes: pending(events) || pending(cells) },
+  }), [aisOff, fishing, slicks, events, cells]);
+  const step = tour ? tour.tour.steps[tour.at] : null;
+  const shown = useMemo<StepShown | "loading" | null>(() => (step ? step.show(tourData) : null), [step, tourData]);
+  const stepKey = tour ? `${tour.tour.id}:${tour.at}:${tour.n}` : null;
+
+  const startTour = (t: Tour) => {
+    if (!tour) saved.current = { visible, noTakeOnly, showNoTakeAreas };
+    setTour((cur) => ({ tour: t, at: 0, n: (cur?.n ?? 0) + 1 }));
+    setToursOpen(false);
   };
-  useEffect(() => setTour(null), [period]);   // a new period has other leads
+  const startTopCase = () => {
+    if (tourLead) startTour(caseTour(tourLead, lookup({ kind: tourLead.kind, id: tourLead.id })?.record.statements ?? []));
+  };
+  const tourStep = (at: number) => {
+    if (!tour || at < 0 || at >= tour.tour.steps.length) return;
+    setTour({ ...tour, at, n: tour.n + 1 });
+  };
+  const endTour = useCallback(() => {
+    setTour(null);
+    const before = saved.current;
+    saved.current = null;
+    if (!before) return;
+    // put the layers back, keeping the open case's own layer drawn so the panel and the map still agree
+    const layer = selection && LAYER_OF[selection.kind];
+    setVisible(layer ? { ...before.visible, [layer]: true } : before.visible);
+    setNoTakeOnly(before.noTakeOnly);
+    setShowNoTakeAreas(before.showNoTakeAreas);
+  }, [selection]);
+  // entering a step: draw exactly its layers (they start loading what the step needs)
+  useEffect(() => {
+    if (!step) return;
+    if (step.layers) {
+      const on = new Set(step.layers);
+      setVisible((v) => Object.fromEntries(Object.keys(v).map((k) => [k, on.has(k as LayerId)])) as Record<LayerId, boolean>);
+    }
+    if (step.noTakeOnly !== undefined) { setNoTakeOnly(step.noTakeOnly); setShowNoTakeAreas(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey]);
+  // once its data is in: open what the step shows and frame it
+  useEffect(() => {
+    if (!stepKey || !shown || shown === "loading" || applied.current === stepKey) return;
+    applied.current = stepKey;
+    if (shown.sel) select(shown.sel);
+    else close();   // a step about a whole layer: the last case would only get in the way
+    if (shown.slick) setSlickLink(shown.slick);
+    if (shown.view) setCamera({ view: shown.view, key: stepKey });
+  }, [stepKey, shown, select, close]);
+  const endRef = useRef(endTour);
+  endRef.current = endTour;
+  useEffect(() => endRef.current(), [period]);   // a new period has other records
   const focus = useMemo(() => spot ?? (seaItem ? { lon: seaItem.record.lon, lat: seaItem.record.lat, key: `${seaItem.kind}:${seaItem.record.id}` } : null),
     [spot, seaItem]);
 
@@ -171,7 +224,7 @@ export default function App() {
       <Header meta={meta.data} />
       <main className={`main${drawerOpen ? " has-drawer" : ""}${railOpen ? "" : " rail-closed"}`}>
         <LayerRail meta={meta.data} visible={visible} onToggle={toggle} open={open} onOpen={openLayer}
-          selection={selection} onSelect={select} leads={leads} leadsLoading={leadsLoading} onTour={startTour} aisOff={aisOff} slicks={slicks} fishing={fishing}
+          selection={selection} onSelect={select} leads={leads} leadsLoading={leadsLoading} aisOff={aisOff} slicks={slicks} fishing={fishing}
           encounters={encounters} loitering={loitering} closures={closures}
           period={period} onPeriod={changePeriod} lanesMonth={lanesMonth}
           changeSpan={changeSpan} onChangeSpan={changeSpanTo} changeEvents={events}
@@ -193,9 +246,14 @@ export default function App() {
             lanesMonth={lanesMonth} nightDay={imageDay(period, 3)} chlDay={imageDay(period, 3)}
             track={selection?.kind === "vessel" ? vessel.data : undefined}
             slickLink={selection?.kind === "vessel" ? slickLink?.slick ?? null : null}
-            showNoTakeAreas={showNoTakeAreas} noTakeOnly={noTakeOnly} />
+            showNoTakeAreas={showNoTakeAreas} noTakeOnly={noTakeOnly} camera={camera} />
           </ErrorBoundary>
-          {tour && <CaseTour steps={tour.steps} at={tour.at} onStep={tourStep} onEnd={() => setTour(null)} />}
+          <button type="button" className="btn btn-sm tours-toggle" aria-expanded={toursOpen} onClick={() => setToursOpen((o) => !o)}>
+            {toursOpen ? "Hide tours" : "Guided tours"}
+          </button>
+          {toursOpen && <TourPanel topLead={tourLead} leadsLoading={leadsLoading} tours={THEMED_TOURS} active={tour?.tour.id ?? null}
+            onTopCase={startTopCase} onStart={startTour} onEnd={endTour} onClose={() => setToursOpen(false)} />}
+          {tour && shown && <CaseTour tour={tour.tour} at={tour.at} shown={shown} onStep={tourStep} onEnd={endTour} besidePanel={toursOpen} />}
           <MapKey visible={visible} noTakeAreas={showNoTakeAreas} />
           <LoadStatus items={[
             ...(visible.aisOff || visible.hotspots || visible.turnOns ? [{ name: "AIS-off events", ...aisOff }] : []),

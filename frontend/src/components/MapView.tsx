@@ -11,6 +11,7 @@ import { BORDER, CLOSURE, ENCOUNTER, FISHING, ICONS, INK, LOITER, MAGENTA, NOTAK
 import { gibsTiles, type LayerId, type Period, type Selection } from "../lib/layers";
 import { TRACK_RAMP, trackFeatures } from "../lib/track";
 import { sdfImage } from "../lib/sdf";
+import type { TourView } from "../lib/tour";
 import { shipRadius, shipSvg, type ShipOptions } from "../lib/ship3d";
 import { markIcon, shapeOf, vesselClass } from "../lib/vessel";
 
@@ -35,6 +36,7 @@ interface Props {
   closures: Closure[];
   period: Period;                    // fishing-effort tiles follow it
   slickLink?: OilSlick | null;       // the slick the open ship is a candidate source of
+  camera?: { view: TourView; key: string } | null;   // a tour step: zoom in or out to these bounds when the key changes
 }
 
 const DIR_COLOR = { INCREASING: "#a3166f", DECREASING: "#2d6a9f", NONE: "#566676" } as const;   // chart magenta / shelf blue
@@ -191,7 +193,7 @@ function yearOf(v: unknown): string | null {
 
 export function MapView({ visible, aisOff, slicks, fishing, cells, events, selection, focus, onSelect,
                           lanesMonth, nightDay, chlDay, track, showNoTakeAreas = true, noTakeOnly = false,
-                          encounters, loitering, closures, period, slickLink = null }: Props) {
+                          encounters, loitering, closures, period, slickLink = null, camera = null }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -897,6 +899,14 @@ export function MapView({ visible, aisOff, slicks, fishing, cells, events, selec
     m.easeTo({ center: [focus.lon, focus.lat], zoom: Math.max(m.getZoom(), 4.2), duration: 900 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, focus?.key]);
+
+  // a tour step frames what it shows, zooming out or in as it needs; declared after the record's own move so it wins when both change
+  useEffect(() => {
+    const m = map.current;
+    if (!ready || !m || !camera) return;
+    m.fitBounds(camera.view.bounds, { padding: { top: 190, bottom: 110, left: 50, right: 50 }, maxZoom: camera.view.maxZoom ?? 7, duration: 1400 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, camera?.key]);
 
   // Labels are real buttons: keyboard-focusable, screen-reader friendly, clickable.
   useEffect(() => {

@@ -24,7 +24,6 @@ interface Props {
   onSelect: (sel: Selection) => void;
   leads: Lead[];
   leadsLoading: boolean;
-  onTour?: () => void;      // walk through the top case step by step
   aisOff: Resource<AisOffResponse>;
   slicks: Resource<SlicksResponse>;
   fishing: Resource<ProtectedFishingResponse>;
@@ -133,14 +132,11 @@ const LEAD_WORD: Partial<Record<SeaKind, string>> = {
 };
 
 /** The strongest leads of the period across every layer: the place to start. Selecting one opens its case and draws its layer. */
-function TopLeads({ leads, loading, selection, onSelect, onTour }: { leads: Lead[]; loading: boolean } & Pick<Props, "selection" | "onSelect" | "onTour">) {
+function TopLeads({ leads, loading, selection, onSelect }: { leads: Lead[]; loading: boolean } & Pick<Props, "selection" | "onSelect">) {
   return (
     <section className="leads" aria-labelledby="leads-title">
       <h3 id="leads-title" className="leads-title">Start here: the strongest leads</h3>
       <p className="leads-note">Ranked by what makes each stand out, shown under it. Select one to open its case.</p>
-      {onTour && leads.length > 0 && (
-        <button type="button" className="btn btn-sm btn-primary leads-tour" onClick={onTour}>Follow the top case, step by step</button>
-      )}
       {!leads.length && loading && <Skeleton label="Finding the strongest leads" lines={3} height="3rem" />}
       {!leads.length && !loading && <p className="muted layer-empty">Nothing stands out in this period. Try a longer one, or browse the layers below.</p>}
       {leads.length > 0 && (
@@ -220,7 +216,7 @@ function Pending({ r, what }: { r: Resource<unknown>; what: string }) {
 
 export function LayerRail(p: Props) {
   const { meta, visible, onToggle, open, onOpen, selection, onSelect, aisOff, slicks, fishing, encounters, loitering, closures,
-          leads, leadsLoading, onTour, changeSpan, onChangeSpan, changeEvents, period, onPeriod, lanesMonth, nightDay, chlDay,
+          leads, leadsLoading, changeSpan, onChangeSpan, changeEvents, period, onPeriod, lanesMonth, nightDay, chlDay,
           showNoTakeAreas, onToggleNoTakeAreas, noTakeOnly, onToggleNoTakeOnly } = p;
 
   const filteredFishing = fishing.data?.events
@@ -377,7 +373,7 @@ export function LayerRail(p: Props) {
       </div>
       <div className="rail-body">
         <ShipSearch selection={selection} onSelect={onSelect} />
-        <TopLeads leads={leads} loading={leadsLoading} selection={selection} onSelect={onSelect} onTour={onTour} />
+        <TopLeads leads={leads} loading={leadsLoading} selection={selection} onSelect={onSelect} />
         <h3 className="rail-section">Map layers</h3>
         {LAYER_GROUPS.map((g) => (
           <section key={g.id} className="layer-group" aria-labelledby={`layer-group-${g.id}`}>

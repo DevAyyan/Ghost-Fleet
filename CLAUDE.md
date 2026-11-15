@@ -28,6 +28,8 @@ frontend/src/               React 19 + TypeScript + Vite 8 + MapLibre GL 4.7
   lib/vessel.ts             Vessel class from GFW type or gear -> which hull silhouette to draw
   components/Glyph.tsx      A chart symbol as inline SVG
   components/LayerRail.tsx  Left navigation rail: period filter, ship search, layer list
+  components/TourPanel.tsx  Right-hand guided-tours panel: follow the top case, or a themed tour
+  lib/tour.ts, lib/tours.ts Tour steps (layers, camera bounds, record picked from live data) and the four themed tours
   components/SeaDrawer.tsx  Case drawer for events, hotspots, slicks, fishing, and joint dark operations
   components/VesselDrawer.tsx  Single ship timeline, path visualization, and dark gaps
   components/ShipProfile.tsx   Figure of the vessel type as a 3D model, with its recorded length
