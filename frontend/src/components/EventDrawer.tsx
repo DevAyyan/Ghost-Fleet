@@ -1,7 +1,9 @@
+import { useContext } from "react";
 import { api } from "../api/client";
 import { SeriesChart } from "../charts/SeriesChart";
 import { WaterfallChart } from "../charts/WaterfallChart";
 import { useResource } from "../hooks/useResource";
+import { ChangeSpanContext, spanQuery } from "../lib/span";
 import { humanCellId } from "../lib/format";
 import { DrawerFrame } from "./DrawerFrame";
 import { CaseFileActions, CauseLens, ConfidencePanel, DisproofPanel, OppositeNeighbors } from "./panels";
@@ -10,7 +12,8 @@ import { DemoBadge, ErrorState, Section, Skeleton, StatementRow, TrendChip } fro
 interface Props { eventId: string; alpha: number; onClose: () => void; onOpenCell: (id: string) => void }
 
 export function EventDrawer({ eventId, alpha, onClose, onOpenCell }: Props) {
-  const res = useResource(`event:${eventId}`, () => api.event(eventId));
+  const span = useContext(ChangeSpanContext);
+  const res = useResource(`event:${eventId}${spanQuery(span)}`, () => api.event(eventId, span));
 
   if (res.status !== "success") {
     return (
@@ -27,7 +30,7 @@ export function EventDrawer({ eventId, alpha, onClose, onOpenCell }: Props) {
   return (
     <DrawerFrame title={`Change near ${humanCellId(e.leadCellId)}`} onClose={onClose}
       extra={<><TrendChip direction={e.direction} pct={e.pctPerYear} />{d.isDemoData && <DemoBadge />}</>}>
-      <Section title="What changed">
+      <Section title="What changed" hint={`Trend over ${d.series[0]?.month ?? ""} to ${d.series[d.series.length - 1]?.month ?? ""}, the months chosen for this layer.`}>
         <StatementRow statement={e.headline} />
         {d.statements.map((s) => <StatementRow key={s.text} statement={s} />)}
       </Section>

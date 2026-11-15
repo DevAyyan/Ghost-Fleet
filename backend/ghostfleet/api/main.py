@@ -27,7 +27,7 @@ from ..sea import CONTEXT_LAYERS, MAX_SPAN_DAYS, LayerNotBuilt, SeaWatch, defaul
 from ..synthetic import make_panel
 from . import schemas as S
 from . import sea_service
-from .service import GhostFleetService, NotFound
+from .service import BadSpan, GhostFleetService, NotFound
 
 log = logging.getLogger("ghostfleet.api")
 MAX_MAP_CELLS = int(os.getenv("GHOSTFLEET_MAX_MAP_CELLS", "20000"))   # the global build has a few thousand
@@ -199,9 +199,11 @@ def get_meta(request: Request):
 
 
 @app.get("/api/cells", response_model=S.CellsResponse)
-def get_cells(request: Request, only: str | None = Query(None, pattern="^events$")):
-    """Every analysis cell, or with `?only=events` just the cells that belong to a change event (all the map needs)."""
-    s = svc(request)
+def get_cells(request: Request, only: str | None = Query(None, pattern="^events$"),
+              start: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"), end: str | None = Query(None, pattern=r"^\d{4}-\d{2}$")):
+    """Every analysis cell, or with `?only=events` just the cells that belong to a change event (all the map needs).
+    `start`/`end` ("YYYY-MM"): the months the trend scan runs over (at least 24; default all)."""
+    s = span(request, start, end)
     if only == "events":
         return s.event_cells()
     if len(s.panel.cell_ids) > MAX_MAP_CELLS:
@@ -267,6 +269,19 @@ def period(start: str | None, end: str | None) -> tuple[str, str]:
 def _compact(resp, compact: bool, records: str = "events"):
     """`?compact=true` on a list endpoint: each distinct statement once per response (see sea_service.pool_statements)."""
     return sea_service.pool_statements(resp, records) if compact else resp
+
+
+MONTH = r"^\d{4}-\d{2}$"
+
+
+def span(request: Request, start: str | None, end: str | None) -> GhostFleetService:
+    """The change analysis over the months start..end (default: every month in the panel)."""
+    return svc(request).for_span(start, end)
+
+
+@app.exception_handler(BadSpan)
+async def _bad_span(_: Request, exc: BadSpan):
+    return _err(422, "BAD_SPAN", str(exc))
 
 
 @app.exception_handler(BadPeriod)
@@ -424,31 +439,35 @@ def refresh(request: Request, x_refresh_token: str | None = Header(None)):
 
 
 @app.get("/api/cells/{cell_id}", response_model=S.CellDetailResponse)
-def get_cell(cell_id: str, request: Request):
-    return svc(request).cell(cell_id)
+def get_cell(cell_id: str, request: Request, start: str | None = Query(None, pattern=MONTH), end: str | None = Query(None, pattern=MONTH)):
+    return span(request, start, end).cell(cell_id)
 
 
 @app.get("/api/events", response_model=S.EventsResponse)
 def list_events(request: Request, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
-                direction: S.Direction | None = None):
-    return svc(request).list_events(page, page_size, direction)
+                direction: S.Direction | None = None,
+                start: str | None = Query(None, pattern=MONTH), end: str | None = Query(None, pattern=MONTH)):
+    """Change events found over the months start..end ("YYYY-MM", at least 24; default all). Ids belong to that span."""
+    return span(request, start, end).list_events(page, page_size, direction)
 
 
 @app.get("/api/events/{event_id}", response_model=S.EventDetailResponse)
-def get_event(event_id: str, request: Request):
-    return svc(request).event(event_id)
+def get_event(event_id: str, request: Request, start: str | None = Query(None, pattern=MONTH), end: str | None = Query(None, pattern=MONTH)):
+    return span(request, start, end).event(event_id)
 
 
 @app.post("/api/events/{event_id}/disproof", response_model=S.DisproofResponse)
-def run_disproof(event_id: str, request: Request, body: S.DisproofRequest | None = None):
+def run_disproof(event_id: str, request: Request, body: S.DisproofRequest | None = None,
+                 start: str | None = Query(None, pattern=MONTH), end: str | None = Query(None, pattern=MONTH)):
     """Pure computation, cached, no stored state: safe to retry."""
-    return svc(request).disproof(event_id, body.variants if body else None)
+    return span(request, start, end).disproof(event_id, body.variants if body else None)
 
 
 @app.get("/api/events/{event_id}/case-file", response_model=S.CaseFile,
          responses={200: {"content": {"application/geo+json": {}}}})
-def get_case_file(event_id: str, request: Request, format: S.CaseFileFormat = S.CaseFileFormat.JSON):
-    s = svc(request)
+def get_case_file(event_id: str, request: Request, format: S.CaseFileFormat = S.CaseFileFormat.JSON,
+                  start: str | None = Query(None, pattern=MONTH), end: str | None = Query(None, pattern=MONTH)):
+    s = span(request, start, end)
     filename = f"ghostfleet-case-{event_id}.{format.value}"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     if format is S.CaseFileFormat.GEOJSON:

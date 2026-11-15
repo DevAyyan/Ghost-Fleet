@@ -14,6 +14,7 @@ import { VesselDrawer, useVessel } from "./components/VesselDrawer";
 import type { OilSlick } from "./api/types";
 import { useResource } from "./hooks/useResource";
 import { rankLeads } from "./lib/leads";
+import { ChangeSpanContext, normalSpan, spanQuery, type ChangeSpan } from "./lib/span";
 import { buildTour, type TourStep } from "./lib/tour";
 import { CaseTour } from "./components/CaseTour";
 import { DEFAULT_VISIBLE, imageDay, lastDays, monthsIn, periodProblem, type LayerId, type Period, type Selection } from "./lib/layers";
@@ -25,7 +26,7 @@ const LAYER_OF: Partial<Record<(typeof KINDS)[number], LayerId>> = {
   encounter: "encounters", loitering: "loitering", closure: "closures",
 };
 
-function readUrl(): { selection: Selection; period: Period } {
+function readUrl(): { selection: Selection; period: Period; span: ChangeSpan | null } {
   const q = new URLSearchParams(window.location.search);
   let selection: Selection = null;
   for (const kind of KINDS) {
@@ -33,13 +34,16 @@ function readUrl(): { selection: Selection; period: Period } {
     if (id) { selection = { kind, id }; break; }
   }
   const asked = { start: q.get("from") ?? "", end: q.get("to") ?? "" };
-  return { selection, period: periodProblem(asked) ? lastDays(30) : asked };
+  const cfrom = q.get("cfrom"), cto = q.get("cto");
+  const span = cfrom && cto && /^\d{4}-\d{2}$/.test(cfrom) && /^\d{4}-\d{2}$/.test(cto) ? { start: cfrom, end: cto } : null;
+  return { selection, period: periodProblem(asked) ? lastDays(30) : asked, span };
 }
 
-function writeUrl(sel: Selection, period: Period) {
+function writeUrl(sel: Selection, period: Period, span: ChangeSpan | null) {
   const q = new URLSearchParams();
   const def = lastDays(30);
   if (period.start !== def.start || period.end !== def.end) { q.set("from", period.start); q.set("to", period.end); }
+  if (span) { q.set("cfrom", span.start); q.set("cto", span.end); }
   if (sel) q.set(sel.kind, sel.id);
   const s = q.toString();
   window.history.replaceState(null, "", s ? `?${s}` : window.location.pathname);
@@ -49,6 +53,8 @@ export default function App() {
   const [initial] = useState(readUrl);
   const [selection, setSelection] = useState<Selection>(initial.selection);
   const [period, setPeriod] = useState<Period>(initial.period);
+  // the months the "Lasting changes" trend scan runs over (null: every month, the precomputed scan)
+  const [changeSpan, setChangeSpan] = useState<ChangeSpan | null>(initial.span);
   const [visible, setVisible] = useState<Record<LayerId, boolean>>(() => {
     const layer = initial.selection && LAYER_OF[initial.selection.kind];
     return layer ? { ...DEFAULT_VISIBLE, [layer]: true } : DEFAULT_VISIBLE;
@@ -70,11 +76,17 @@ export default function App() {
   const loitering = useResource(visible.loitering ? `loitering:${start}:${end}` : null, () => api.loitering(start, end));
   const closures = useResource(visible.closures ? "closures" : null, api.closures);
   // The trend scan's geometry is several MB: fetched only once its layer is switched on.
-  const cells = useResource(visible.changes ? "cells" : null, api.cells);
-  const events = useResource(visible.changes ? "events" : null, () => api.events());
+  const sq = spanQuery(changeSpan);
+  const cells = useResource(visible.changes ? `cells${sq}` : null, () => api.cells(changeSpan));
+  const events = useResource(visible.changes || open === "changes" ? `events${sq}` : null, () => api.events(changeSpan));
   const vessel = useVessel(selection?.kind === "vessel" ? selection.id : null, period);
 
-  useEffect(() => writeUrl(selection, period), [selection, period]);
+  useEffect(() => writeUrl(selection, period, changeSpan), [selection, period, changeSpan]);
+  const changeSpanTo = useCallback((s: ChangeSpan | null) => {
+    setChangeSpan(normalSpan(s, meta.data?.months ?? []));
+    // a change's id belongs to the span it was found in: close it rather than show another span's change under it
+    setSelection((sel) => (sel?.kind === "event" || sel?.kind === "cell" ? null : sel));
+  }, [meta.data]);
 
   // shipping lanes come a month at a time: use the months the period touches
   const allMonths = meta.data?.months ?? [];
@@ -162,6 +174,7 @@ export default function App() {
           selection={selection} onSelect={select} leads={leads} leadsLoading={leadsLoading} onTour={startTour} aisOff={aisOff} slicks={slicks} fishing={fishing}
           encounters={encounters} loitering={loitering} closures={closures}
           period={period} onPeriod={changePeriod} lanesMonth={lanesMonth}
+          changeSpan={changeSpan} onChangeSpan={changeSpanTo} changeEvents={events}
           nightDay={imageDay(period, 3)} chlDay={imageDay(period, 3)}
           showNoTakeAreas={showNoTakeAreas} onToggleNoTakeAreas={setShowNoTakeAreas}
           noTakeOnly={noTakeOnly} onToggleNoTakeOnly={setNoTakeOnly} />
@@ -198,6 +211,7 @@ export default function App() {
         <ErrorBoundary resetKey={selection ? `${selection.kind}:${selection.id}` : null} onReset={close}
           title="This record could not be shown">
         <DrawerBack.Provider value={back}>
+        <ChangeSpanContext.Provider value={changeSpan}>
         {selection?.kind === "event" && (
           <EventDrawer key={selection.id} eventId={selection.id} alpha={alpha} onClose={close}
             onOpenCell={(id) => follow({ kind: "cell", id })} />
@@ -213,6 +227,7 @@ export default function App() {
         {seaItem && <SeaDrawer key={`${seaItem.kind}:${seaItem.record.id}`} item={seaItem} onClose={close} period={period}
           onOpenVessel={(id) => follow({ kind: "vessel", id })} candidatesAvailable={slicks.data?.candidatesAvailable}
           onOpenSlickSource={(id, slick, rank) => { follow({ kind: "vessel", id }); setSlickLink({ slick, rank }); }} />}
+        </ChangeSpanContext.Provider>
         </DrawerBack.Provider>
         </ErrorBoundary>
       </main>

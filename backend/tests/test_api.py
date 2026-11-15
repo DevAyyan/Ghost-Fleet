@@ -156,3 +156,39 @@ def test_event_cells_are_exactly_the_cells_inside_events(client):
     assert cells and all(c["eventId"] for c in cells)
     full = [c for c in client.get("/api/cells").json()["cells"] if c["eventId"]]
     assert [c["cellId"] for c in cells] == [c["cellId"] for c in full]
+
+
+# ---------- the change scan over a chosen span of months ----------
+def test_span_too_short_or_outside_the_panel_is_refused(client):
+    for q in ("start=2023-01&end=2023-12", "start=2019-01&end=2023-12", "start=2024-01&end=2022-01"):
+        r = client.get(f"/api/events?{q}")
+        assert r.status_code == 422, q
+        assert r.json()["error"]["code"] == "BAD_SPAN"
+
+
+def test_span_covering_every_month_is_the_default_scan(client):
+    months = client.get("/api/meta").json()["months"]
+    full = client.get(f"/api/events?start={months[0]}&end={months[-1]}").json()
+    assert full["data"] == client.get("/api/events").json()["data"]
+
+
+def test_span_rescans_only_those_months_and_its_ids_resolve_within_it(client):
+    months = client.get("/api/meta").json()["months"]
+    start, end = months[-60], months[-1]   # the planted synthetic changes still show over these 60 months
+    evs = client.get(f"/api/events?start={start}&end={end}").json()
+    assert evs["data"], "the planted changes should survive a 60-month scan"
+    cells = client.get(f"/api/cells?only=events&start={start}&end={end}").json()
+    assert cells["months"] == months[-60:]
+    eid = evs["data"][0]["eventId"]
+    det = client.get(f"/api/events/{eid}?start={start}&end={end}").json()
+    assert [p["month"] for p in det["series"]] == months[-60:]
+    assert f"{start}–{end}" in det["recommendedAction"]["text"] or det["confidence"]["level"] == "LOW"
+    assert client.post(f"/api/events/{eid}/disproof?start={start}&end={end}").json()["eventId"] == eid
+
+
+def test_panel_window_keeps_cells_and_slices_months():
+    from ghostfleet.synthetic import make_panel
+    p = make_panel(seed=7)
+    w = p.window("2022-01", "2023-12")
+    assert w.cell_ids == p.cell_ids and w.months.size == 24 and w.unmatched.shape == (len(p.cell_ids), 24)
+    assert str(w.months[0]) == "2022-01" and str(w.months[-1]) == "2023-12"

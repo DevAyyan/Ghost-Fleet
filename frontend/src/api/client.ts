@@ -1,3 +1,4 @@
+import { spanQuery, type ChangeSpan } from "../lib/span";
 import type {
   AisOffResponse, ClosuresResponse, EncountersResponse, LoiteringResponse, VesselInsights, ProtectedFishingResponse, SlicksResponse, VesselResponse, VesselSearchResponse,
   ApiErrorBody, SharesStatements, StatementTable, CellDetailResponse, DetectionPoint, PackedDetection, CellsResponse, DetectionsResponse, DisproofResponse, DisproofVariant,
@@ -53,17 +54,19 @@ async function request<T>(path: string, init?: RequestInit, fetchImpl: typeof fe
 export const api = {
   meta: () => request<MetaResponse>("/api/meta"),
   /** Only the cells that belong to a change event: all the map draws, and a fraction of the full list. */
-  cells: () => request<CellsResponse>("/api/cells?only=events"),
+  cells: (span: ChangeSpan | null = null) => request<CellsResponse>(`/api/cells?only=events${spanQuery(span, "&")}`),
   /** Asked for in packed form (a worldwide month is over 5 MB as objects) and unpacked here. */
   detections: async (month: string): Promise<DetectionsResponse> => {
     const r = await request<DetectionsResponse>(`/api/detections?month=${encodeURIComponent(month)}&compact=true`);
     return r.packed ? { ...r, points: unpackDetections(r.packed), packed: null } : r;
   },
-  cell: (id: string) => request<CellDetailResponse>(`/api/cells/${encodeURIComponent(id)}`),
-  events: (page = 1, pageSize = 50) => request<EventsResponse>(`/api/events?page=${page}&pageSize=${pageSize}`),
-  event: (id: string) => request<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`),
-  disproof: (id: string, variants?: DisproofVariant[]) =>
-    request<DisproofResponse>(`/api/events/${encodeURIComponent(id)}/disproof`, {
+  // The change endpoints take the span of months the trend scan runs over; event ids belong to their span.
+  cell: (id: string, span: ChangeSpan | null = null) => request<CellDetailResponse>(`/api/cells/${encodeURIComponent(id)}${spanQuery(span)}`),
+  events: (span: ChangeSpan | null = null, page = 1, pageSize = 50) =>
+    request<EventsResponse>(`/api/events?page=${page}&pageSize=${pageSize}${spanQuery(span, "&")}`),
+  event: (id: string, span: ChangeSpan | null = null) => request<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}${spanQuery(span)}`),
+  disproof: (id: string, variants?: DisproofVariant[], span: ChangeSpan | null = null) =>
+    request<DisproofResponse>(`/api/events/${encodeURIComponent(id)}/disproof${spanQuery(span)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(variants ? { variants } : {}),
@@ -90,8 +93,8 @@ export const api = {
   searchVessels: (q: string) => request<VesselSearchResponse>(`/api/sea/vessels/search?q=${encodeURIComponent(q)}`),
   /** MapLibre needs an absolute tile URL template. */
   laneTiles: (month?: string) => `${BASE || window.location.origin}/api/sea/lanes/{z}/{x}/{y}.png${month ? `?month=${month}` : ""}`,
-  caseFileUrl: (id: string, format: "json" | "geojson") =>
-    `${BASE}/api/events/${encodeURIComponent(id)}/case-file?format=${format}`,
+  caseFileUrl: (id: string, format: "json" | "geojson", span: ChangeSpan | null = null) =>
+    `${BASE}/api/events/${encodeURIComponent(id)}/case-file?format=${format}${spanQuery(span, "&")}`,
 };
 
 export { request as _request };

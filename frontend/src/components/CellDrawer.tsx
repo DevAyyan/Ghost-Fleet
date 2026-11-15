@@ -1,7 +1,9 @@
+import { useContext } from "react";
 import { api } from "../api/client";
 import { SeriesChart } from "../charts/SeriesChart";
 import { WaterfallChart } from "../charts/WaterfallChart";
 import { useResource } from "../hooks/useResource";
+import { ChangeSpanContext, spanQuery } from "../lib/span";
 import { humanCellId } from "../lib/format";
 import { DrawerFrame } from "./DrawerFrame";
 import { ErrorState, Section, Skeleton, TrendChip } from "./ui";
@@ -9,7 +11,8 @@ import { ErrorState, Section, Skeleton, TrendChip } from "./ui";
 interface Props { cellId: string; alpha: number; onClose: () => void; onOpenEvent: (eventId: string) => void }
 
 export function CellDrawer({ cellId, alpha, onClose, onOpenEvent }: Props) {
-  const res = useResource(`cell:${cellId}`, () => api.cell(cellId));
+  const span = useContext(ChangeSpanContext);
+  const res = useResource(`cell:${cellId}${spanQuery(span)}`, () => api.cell(cellId, span));
   const title = humanCellId(cellId);
 
   if (res.status !== "success") {

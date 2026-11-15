@@ -38,3 +38,10 @@ class Panel:
 
     def index(self, cell_id: str) -> int:
         return self.cell_ids.index(cell_id)
+
+    def window(self, start: str, end: str) -> "Panel":
+        """The same cells over the months start..end ("YYYY-MM", inclusive) only."""
+        keep = (self.months >= np.datetime64(start, "M")) & (self.months <= np.datetime64(end, "M"))
+        return Panel(cell_ids=self.cell_ids, months=self.months[keep],
+                     **{k: getattr(self, k)[:, keep] for k in ("unmatched", "matched", "opportunities", "ais_reception", "wind", "chl")},
+                     neighbors=self.neighbors, boundaries=self.boundaries, is_synthetic=self.is_synthetic, source_note=self.source_note)

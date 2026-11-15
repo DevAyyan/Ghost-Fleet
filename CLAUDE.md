@@ -42,7 +42,7 @@ backend/scripts/
 
 ## Essential Commands
 ```bash
-# Backend pytest suite (81 tests)
+# Backend pytest suite (85 tests)
 cd backend && pytest
 
 # Run backend API server

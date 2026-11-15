@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, type ApiError } from "../api/client";
-import type { AisOffResponse, ClosuresResponse, EncountersResponse, LoiteringResponse, MetaResponse, ProtectedFishingResponse, SlicksResponse } from "../api/types";
+import type { AisOffResponse, ClosuresResponse, EncountersResponse, EventsResponse, LoiteringResponse, MetaResponse, ProtectedFishingResponse, SlicksResponse } from "../api/types";
 import { useResource, type Resource } from "../hooks/useResource";
 import { formatDateTime, formatDay, formatMonth, formatP, formatSpan, humanCellId, vesselWord } from "../lib/format";
 import type { IconName } from "../lib/icons";
 import type { Lead } from "../lib/leads";
+import { MIN_SPAN_MONTHS, monthsBetween, spanProblem, type ChangeSpan } from "../lib/span";
 import { EARLIEST, LAYERS, LAYER_GROUPS, daysAgo, lastDays, periodProblem, spanDays, type LayerId, type Period, type SeaKind, type Selection } from "../lib/layers";
 import type { ShipOptions } from "../lib/ship3d";
 import { Glyph, Ship } from "./Glyph";
@@ -35,6 +36,9 @@ interface Props {
   lanesMonth: string | null;
   nightDay: string;
   chlDay: string;
+  changeSpan: ChangeSpan | null;                 // months the trend scan runs over (null: all)
+  onChangeSpan: (s: ChangeSpan | null) => void;
+  changeEvents: Resource<EventsResponse>;
   showNoTakeAreas: boolean;
   onToggleNoTakeAreas: (v: boolean) => void;
   noTakeOnly: boolean;
@@ -216,7 +220,7 @@ function Pending({ r, what }: { r: Resource<unknown>; what: string }) {
 
 export function LayerRail(p: Props) {
   const { meta, visible, onToggle, open, onOpen, selection, onSelect, aisOff, slicks, fishing, encounters, loitering, closures,
-          leads, leadsLoading, onTour, period, onPeriod, lanesMonth, nightDay, chlDay,
+          leads, leadsLoading, onTour, changeSpan, onChangeSpan, changeEvents, period, onPeriod, lanesMonth, nightDay, chlDay,
           showNoTakeAreas, onToggleNoTakeAreas, noTakeOnly, onToggleNoTakeOnly } = p;
 
   const filteredFishing = fishing.data?.events
@@ -237,7 +241,7 @@ export function LayerRail(p: Props) {
     fishing: fishing.status === "error" && fishing.error.code === "DATA_UNAVAILABLE"
       ? <span className="layer-count muted">not built</span> : count(fishing, filteredFishing.length),
     slicks: count(slicks, slicks.data?.slicks.length),
-    changes: meta && meta.eventCount > 0 ? <b className="layer-count num">{meta.eventCount.toLocaleString()}</b> : null,
+    changes: changeEvents.status === "idle" ? null : count(changeEvents, changeEvents.data?.pagination.totalItems),
     nightLights: null,
     chlorophyll: null,
   };
@@ -360,7 +364,7 @@ export function LayerRail(p: Props) {
       </>
     ),
     effort: () => <p className="muted layer-empty">Fishing hours from {formatDay(period.start)} to {formatDay(period.end)}. Tiles can take a few seconds the first time.</p>,
-    changes: () => <ChangeList meta={meta} selection={selection} onSelect={onSelect} />,
+    changes: () => <ChangeList meta={meta} selection={selection} onSelect={onSelect} span={changeSpan} onSpan={onChangeSpan} res={changeEvents} />,
     nightLights: () => <p className="muted layer-empty">Image date: {formatDay(nightDay)}. This layer covers the chart with a night view; the other layers stay on top.</p>,
     chlorophyll: () => <p className="muted layer-empty">Image date: {formatDay(chlDay)}.</p>,
   };
@@ -412,31 +416,76 @@ export function LayerRail(p: Props) {
   );
 }
 
-function ChangeList({ meta, selection, onSelect }: Pick<Props, "meta" | "selection" | "onSelect">) {
-  const res = useResource("events", () => api.events());
-  if (res.status === "loading" || res.status === "idle") return <Skeleton label="Loading changes" lines={4} />;
-  if (res.status === "error") return <ErrorState error={res.error} onRetry={res.refetch} title="Could not load changes" />;
-  const events = res.data.data;
-  if (!events.length) return <p className="muted layer-empty">No change survived every correction. Apparent shifts were explained by coverage, AIS reception, season or wind.</p>;
+/** The months the trend scan runs over: two month pickers and a few spans ending at the newest month. */
+function SpanBar({ months, span, onSpan }: { months: string[]; span: ChangeSpan | null; onSpan: (s: ChangeSpan | null) => void }) {
+  const first = months[0] ?? "", last = months[months.length - 1] ?? "";
+  const current = span ?? { start: first, end: last };
+  const [draft, setDraft] = useState(current);
+  useEffect(() => setDraft(span ?? { start: first, end: last }), [span, first, last]);
+  const problem = spanProblem(draft, months);
+  const edit = (next: ChangeSpan) => {
+    setDraft(next);
+    if (!spanProblem(next, months) && (next.start !== current.start || next.end !== current.end)) onSpan(next);
+  };
+  const back = (n: number) => months[Math.max(0, months.length - n)] ?? first;
+  const presets: [string, ChangeSpan][] = [["All", { start: first, end: last }], ["Last 3 years", { start: back(36), end: last }],
+                                           ["Last 2 years", { start: back(24), end: last }]];
+  return (
+    <fieldset className="period span-bar">
+      <legend>Months tested for a trend</legend>
+      <div className="period-dates">
+        <label>From<input type="month" value={draft.start} min={first} max={last} onChange={(e) => edit({ ...draft, start: e.target.value })} /></label>
+        <label>To<input type="month" value={draft.end} min={first} max={last} onChange={(e) => edit({ ...draft, end: e.target.value })} /></label>
+      </div>
+      <div className="period-presets" role="group" aria-label="Quick spans">
+        {presets.map(([name, p]) => (
+          <button key={name} type="button" className="btn btn-sm" aria-pressed={p.start === current.start && p.end === current.end}
+            onClick={() => edit(p)}>{name}</button>
+        ))}
+      </div>
+      {problem
+        ? <p className="error-text period-note" role="alert">{problem}</p>
+        : <p className="muted period-note">{formatMonth(current.start)} to {formatMonth(current.end)}, {monthsBetween(current.start, current.end)} months.
+            Its own months, not the period above: a trend needs at least {MIN_SPAN_MONTHS}.</p>}
+    </fieldset>
+  );
+}
+
+function ChangeList({ meta, selection, onSelect, span, onSpan, res }: Pick<Props, "meta" | "selection" | "onSelect"> & {
+  span: ChangeSpan | null; onSpan: (s: ChangeSpan | null) => void; res: Resource<EventsResponse>;
+}) {
+  const bar = meta && meta.months.length > 0 ? <SpanBar months={meta.months} span={span} onSpan={onSpan} /> : null;
+  if (res.status === "loading" || res.status === "idle") {
+    return <>{bar}{span && <p className="muted layer-empty">Running the trend scan over these months. The first time for a span can take a minute.</p>}
+      <Skeleton label="Loading changes" lines={4} /></>;
+  }
+  if (res.status === "error") return <>{bar}<ErrorState error={res.error} onRetry={(res as { refetch?: () => void }).refetch} title="Could not load changes" /></>;
+  const events = res.data.data, total = res.data.pagination.totalItems;
+  const n = span ? monthsBetween(span.start, span.end) : meta?.months.length ?? 0;
   return (
     <>
-      {meta && (
-        <p className="muted layer-empty">
-          Tested {meta.cellCount.toLocaleString()} areas over {meta.months.length} months; {meta.eventCount.toLocaleString()} changes survive every correction.
-          {meta.eventCount > events.length ? ` The ${events.length} strongest are listed and drawn.` : ""}
-        </p>
-      )}
-      <ol className="feed" aria-label="Ranked lasting changes">
-        {events.map((e) => (
-          <li key={e.eventId}>
-            <button type="button" className="feed-btn" aria-current={selection?.kind === "event" && selection.id === e.eventId}
-              onClick={() => onSelect({ kind: "event", id: e.eventId })}>
-              <span className="feed-title">{e.place ?? humanCellId(e.leadCellId)} <TrendChip direction={e.direction} pct={e.pctPerYear} /></span>
-              <span className="feed-meta">Around {humanCellId(e.leadCellId)}, {e.cellIds.length} {e.cellIds.length === 1 ? "area" : "areas"}, false-discovery q {formatP(e.q)}.</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      {bar}
+      {!events.length
+        ? <p className="muted layer-empty">No change survived every correction over these months. Apparent shifts were explained by coverage, AIS reception, season or wind.</p>
+        : <>
+          {meta && (
+            <p className="muted layer-empty">
+              Tested {meta.cellCount.toLocaleString()} areas over {n} months; {total.toLocaleString()} changes survive every correction.
+              {total > events.length ? ` The ${events.length} strongest are listed and drawn.` : ""}
+            </p>
+          )}
+          <ol className="feed" aria-label="Ranked lasting changes">
+            {events.map((e) => (
+              <li key={e.eventId}>
+                <button type="button" className="feed-btn" aria-current={selection?.kind === "event" && selection.id === e.eventId}
+                  onClick={() => onSelect({ kind: "event", id: e.eventId })}>
+                  <span className="feed-title">{e.place ?? humanCellId(e.leadCellId)} <TrendChip direction={e.direction} pct={e.pctPerYear} /></span>
+                  <span className="feed-meta">Around {humanCellId(e.leadCellId)}, {e.cellIds.length} {e.cellIds.length === 1 ? "area" : "areas"}, false-discovery q {formatP(e.q)}.</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </>}
     </>
   );
 }

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import math
+import threading
+from collections import OrderedDict
 from datetime import datetime, timezone
 from functools import lru_cache
 
@@ -65,6 +67,14 @@ def _pct(t: TrendResult, ref: float) -> float | None:
     return f(t.slope * 12 / abs(ref) * 100) if ref and math.isfinite(ref) else None
 
 
+MIN_SPAN_MONTHS = 24   # the seasonal correction needs every calendar month at least twice
+SPANS_KEPT = 4         # scans of user-chosen spans kept in memory (each holds every cell's waterfall)
+
+
+class BadSpan(ValueError):
+    """A month span the change scan cannot be run on."""
+
+
 class NotFound(Exception):
     def __init__(self, what: str, ident: str):
         super().__init__(f"{what} '{ident}' not found")
@@ -99,6 +109,41 @@ class GhostFleetService:
                                                else "− weather (no data in this build)")
         self._cells_cache: S.CellsResponse | None = None
         self._event_cells_cache: S.CellsResponse | None = None
+        self._spans: OrderedDict[tuple[str, str], GhostFleetService] = OrderedDict()
+        self._span_locks: dict[tuple[str, str], threading.Lock] = {}
+        self._spans_lock = threading.Lock()
+
+    # ---------- the scan over a chosen span of months ----------
+    def for_span(self, start: str | None, end: str | None) -> "GhostFleetService":
+        """This analysis over the months start..end ("YYYY-MM", inclusive). The whole panel is this service itself;
+        any other span is scanned on first use and kept (the last few spans only). Event ids belong to their span."""
+        if not start and not end:
+            return self
+        start, end = start or self.months[0], end or self.months[-1]
+        if start not in self.months or end not in self.months:
+            raise BadSpan(f"Months must be between {self.months[0]} and {self.months[-1]}")
+        n = self.months.index(end) - self.months.index(start) + 1
+        if n < MIN_SPAN_MONTHS:
+            raise BadSpan(f"Pick at least {MIN_SPAN_MONTHS} months: the seasonal correction needs each month of the year twice")
+        if (start, end) == (self.months[0], self.months[-1]):
+            return self
+        key = (start, end)
+        with self._spans_lock:
+            if key in self._spans:
+                self._spans.move_to_end(key)
+                return self._spans[key]
+            lock = self._span_locks.setdefault(key, threading.Lock())
+        with lock:   # one scan per span, however many requests ask for it at once
+            with self._spans_lock:
+                if key in self._spans:
+                    return self._spans[key]
+            sub = GhostFleetService(self.panel.window(start, end), alpha=self.alpha, extras=self.extras)
+            with self._spans_lock:
+                self._spans[key] = sub
+                while len(self._spans) > SPANS_KEPT:
+                    old, _ = self._spans.popitem(last=False)
+                    self._span_locks.pop(old, None)
+            return sub
 
     # ---------- helpers ----------
     def _steps(self, cell_id: str) -> list[S.WaterfallStep]:

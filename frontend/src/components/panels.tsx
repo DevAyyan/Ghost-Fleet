@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Confidence, DisproofResponse, Explanation, OppositeNeighbor } from "../api/types";
 import { formatP, formatPct, formatShare, humanCellId } from "../lib/format";
+import { ChangeSpanContext } from "../lib/span";
 import { ErrorState, StatementRow, TrendChip } from "./ui";
 
 export function CauseLens({ explanations }: { explanations: Explanation[] }) {
@@ -52,10 +53,11 @@ export function OppositeNeighbors({ neighbors, onOpenCell }: { neighbors: Opposi
 }
 
 export function DisproofPanel({ eventId }: { eventId: string }) {
+  const span = useContext(ChangeSpanContext);
   const [state, setState] = useState<{ status: "idle" } | { status: "loading" } | { status: "done"; data: DisproofResponse } | { status: "error"; error: ApiError }>({ status: "idle" });
   const run = () => {
     setState({ status: "loading" });
-    api.disproof(eventId).then(
+    api.disproof(eventId, undefined, span).then(
       (data) => setState({ status: "done", data }),
       (error: ApiError) => setState({ status: "error", error }),
     );
@@ -94,10 +96,11 @@ export function DisproofPanel({ eventId }: { eventId: string }) {
 }
 
 export function CaseFileActions({ eventId }: { eventId: string }) {
+  const span = useContext(ChangeSpanContext);
   return (
     <div className="actions">
-      <a className="btn btn-primary" href={api.caseFileUrl(eventId, "json")} download>Download case file</a>
-      <a className="btn" href={api.caseFileUrl(eventId, "geojson")} download>Download map area (GeoJSON)</a>
+      <a className="btn btn-primary" href={api.caseFileUrl(eventId, "json", span)} download>Download case file</a>
+      <a className="btn" href={api.caseFileUrl(eventId, "geojson", span)} download>Download map area (GeoJSON)</a>
       <button type="button" className="btn" onClick={() => window.print()}>Print</button>
     </div>
   );
