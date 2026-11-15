@@ -8,6 +8,7 @@ import { rankLeads, type Lead } from "../lib/leads";
 import { EARLIEST, LAYERS, LAYER_GROUPS, daysAgo, lastDays, periodProblem, spanDays, type LayerId, type Period, type SeaKind, type Selection } from "../lib/layers";
 import type { ShipOptions } from "../lib/ship3d";
 import { Glyph, Ship } from "./Glyph";
+import { LayerSwatch, ZoneSwatch } from "./MapKey";
 import { Ship3d } from "./Ship3d";
 import { ErrorState, Skeleton, TrendChip } from "./ui";
 
@@ -143,11 +144,6 @@ function TopLeads({ leads, loading, selection, onSelect }: { leads: Lead[]; load
   );
 }
 
-/** Layers drawn with a chart symbol show that same symbol in the legend; the rest keep a swatch of their colour or line. */
-const LAYER_GLYPH: Partial<Record<LayerId, IconName>> = {
-  aisOff: "ghost-fishing", turnOns: "fleet", encounters: "meet-carrier", loitering: "wait-carrier", fishing: "fish", slicks: "slick", infra: "platform",
-};
-
 /** What a layer's drawings mean: a ship as the map draws it close up, or a chart symbol. */
 function Key({ items, note }: { items: [IconName | ShipOptions, string][]; note?: string }) {
   return (
@@ -157,24 +153,6 @@ function Key({ items, note }: { items: [IconName | ShipOptions, string][]; note?
       ))}
       {note && <li className="key-note">{note}</li>}
     </ul>
-  );
-}
-
-/** A protected area as the map draws it: hatched with a solid edge where all fishing is banned, dashed where part of it is. */
-function ZoneSwatch({ full }: { full: boolean }) {
-  const id = `hatch-${full ? "full" : "part"}`;
-  return (
-    <svg className="zone-swatch" width="26" height="20" viewBox="0 0 26 20" aria-hidden="true">
-      <defs>
-        <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
-          <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" strokeWidth="1.6" strokeOpacity="0.6" />
-        </pattern>
-      </defs>
-      <rect x="1.5" y="1.5" width="23" height="17" rx="2" fill="currentColor" fillOpacity={full ? 0.12 : 0.07} />
-      {full && <rect x="1.5" y="1.5" width="23" height="17" rx="2" fill={`url(#${id})`} />}
-      <rect x="1.5" y="1.5" width="23" height="17" rx="2" fill="none" stroke="currentColor" strokeWidth={full ? 2 : 1.4}
-        strokeDasharray={full ? undefined : "3 2"} />
-    </svg>
   );
 }
 
@@ -237,7 +215,7 @@ export function LayerRail(p: Props) {
   const counts: Record<LayerId, ReactNode> = {
     lanes: null,
     borders: null,
-    encounters: visible.encounters ? count(encounters, encounters.data?.total) : null,
+    encounters: count(encounters, encounters.data?.total),
     loitering: visible.loitering ? count(loitering, loitering.data?.total) : null,
     closures: closures.data ? <b className="layer-count num">{closures.data.closures.length}</b> : null,
     infra: null,
@@ -397,7 +375,7 @@ export function LayerRail(p: Props) {
                     <div className="layer-row">
                       <input type="checkbox" id={`layer-${l.id}`} checked={visible[l.id]} onChange={() => onToggle(l.id)}
                         aria-label={`Show ${l.name} on the map`} />
-                      {LAYER_GLYPH[l.id] ? <Glyph name={LAYER_GLYPH[l.id]!} size={22} className="sym" /> : <i className={`sym sym-${l.id}`} aria-hidden="true" />}
+                      <LayerSwatch id={l.id} />
                       <button type="button" className="layer-name" aria-expanded={isOpen} aria-controls={`layer-detail-${l.id}`}
                         onClick={() => onOpen(isOpen ? null : l.id)}>
                         <span>{l.name}</span>{counts[l.id]}<i className="chev" aria-hidden="true" />

@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { EventDrawer } from "./components/EventDrawer";
 import { Header } from "./components/Header";
 import { LayerRail } from "./components/LayerRail";
+import { MapKey } from "./components/MapKey";
 import { MapView } from "./components/MapView";
 import { SeaDrawer, closureRecord, type SeaRecord } from "./components/SeaDrawer";
 import { VesselDrawer, useVessel } from "./components/VesselDrawer";
@@ -60,7 +61,7 @@ export default function App() {
   const aisOff = useResource(`aisOff:${start}:${end}`, () => api.aisOff(start, end));
   const slicks = useResource(`slicks:${start}:${end}`, () => api.slicks(start, end));
   const fishing = useResource(`fishing:${start}:${end}`, () => api.protectedFishing(start, end));
-  const encounters = useResource(visible.encounters ? `encounters:${start}:${end}` : null, () => api.encounters(start, end));
+  const encounters = useResource(`encounters:${start}:${end}`, () => api.encounters(start, end));
   const loitering = useResource(visible.loitering ? `loitering:${start}:${end}` : null, () => api.loitering(start, end));
   const closures = useResource(visible.closures ? "closures" : null, api.closures);
   // The trend scan's geometry is several MB: fetched only once its layer is switched on.
@@ -141,6 +142,7 @@ export default function App() {
             slickLink={selection?.kind === "vessel" ? slickLink?.slick ?? null : null}
             showNoTakeAreas={showNoTakeAreas} noTakeOnly={noTakeOnly} />
           </ErrorBoundary>
+          <MapKey visible={visible} noTakeAreas={showNoTakeAreas} />
         </section>
 
         <ErrorBoundary resetKey={selection ? `${selection.kind}:${selection.id}` : null} onReset={close}

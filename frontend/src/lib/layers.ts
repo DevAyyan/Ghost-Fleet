@@ -1,3 +1,5 @@
+import type { IconName } from "./icons";
+
 // The map's layers. The rail lists them group by group (LAYER_GROUPS), in this order within a group. Every one is free, public data.
 export type LayerId = "lanes" | "borders" | "aisOff" | "hotspots" | "turnOns" | "encounters" | "loitering" | "fishing" | "closures"
   | "slicks" | "infra" | "effort" | "changes" | "nightLights" | "chlorophyll";
@@ -13,55 +15,64 @@ export const LAYER_GROUPS: { id: LayerGroupId; name: string }[] = [
   { id: "longView", name: "The long view" },
 ];
 
-export interface LayerDef { id: LayerId; group: LayerGroupId; name: string; about: string; source: string; on: boolean }
+export interface LayerDef {
+  id: LayerId; group: LayerGroupId; name: string; about: string; source: string;
+  on: boolean;   // drawn when the app opens: only a few, so the first view is readable
+  key: string;   // what its mark means, in the key on the map
+}
 
 export const LAYERS: LayerDef[] = [
-  { id: "lanes", group: "sea", name: "Shipping lanes", on: true,
+  { id: "lanes", group: "sea", name: "Shipping lanes", on: true, key: "Shipping lanes: darker is busier",
     about: "Where ships spend their time: the density of AIS positions over the last month of the period. The dark threads are the routes most ships follow.",
     source: "Global Fishing Watch, AIS vessel presence" },
-  { id: "borders", group: "sea", name: "Sea borders", on: true,
+  { id: "borders", group: "sea", name: "Sea borders", on: false, key: "Border between two countries’ waters",
     about: "Each country's exclusive economic zone (EEZ): the waters, usually out to 200 nautical miles, where it alone may license fishing. Lines between neighbours include disputed and provisional ones.",
     source: "Marine Regions EEZ boundaries (Flanders Marine Institute), via Global Fishing Watch" },
-  { id: "aisOff", group: "dark", name: "AIS switched off", on: true,
+  { id: "aisOff", group: "dark", name: "AIS switched off", on: true, key: "Ship that switched AIS off, drawn hollow",
     about: "Vessels whose AIS signal stopped during the period while reception was good, which Global Fishing Watch classes as likely switched off on purpose. Fishing-gear buoys are left out. Open one to see the ship and its path.",
     source: "Global Fishing Watch events" },
-  { id: "hotspots", group: "dark", name: "Where ships go dark most", on: true,
+  { id: "hotspots", group: "dark", name: "Where ships go dark most", on: false, key: "Where ships go dark most",
     about: "The places where AIS was switched off most often during the period, with what the pattern there suggests.",
     source: "Global Fishing Watch events" },
-  { id: "turnOns", group: "dark", name: "Simultaneous AIS turn-ons", on: true,
+  { id: "turnOns", group: "dark", name: "Simultaneous AIS turn-ons", on: false, key: "Ships that went dark together",
     about: "Areas where vessels switched off AIS while entering, operated dark together inside the area, and switched AIS back on while exiting. Coordinated dark operations indicate fleet-level coordination, transshipment (meeting a reefer/bunker), or joint sweeps.",
     source: "Global Fishing Watch AIS gaps" },
-  { id: "encounters", group: "transfers", name: "Meetings at sea", on: true,
+  { id: "encounters", group: "transfers", name: "Meetings at sea", on: false, key: "Two vessels meeting at sea",
     about: "Fishing vessels that held station beside a refrigerated carrier or bunker tanker for hours: how catch and fuel are moved at sea (transshipment). Meetings where either vessel switched AIS off within 48 hours, or that involve a vessel with no public licence on record, are listed first.",
     source: "Global Fishing Watch encounter events, cross-checked with AIS gaps and public RFMO authorisation lists" },
-  { id: "loitering", group: "transfers", name: "Carriers waiting offshore", on: false,
+  { id: "loitering", group: "transfers", name: "Carriers waiting offshore", on: false, key: "Carrier waiting offshore",
     about: "Refrigerated carriers and bunker tankers idling more than 20 nautical miles from shore, the wait that often comes before a transshipment. Those that met a vessel within a day are listed first.",
     source: "Global Fishing Watch loitering events" },
-  { id: "fishing", group: "fishing", name: "Possible unauthorised fishing", on: true,
+  { id: "fishing", group: "fishing", name: "Possible unauthorised fishing", on: true, key: "Vessel that appeared to fish in a protected area",
     about: "Vessels that moved as if fishing inside a no-take marine protected area during the period. A lead to check against the area\u2019s permit list, never a finding.",
     source: "Global Fishing Watch events" },
-  { id: "closures", group: "fishing", name: "Fishing during seasonal bans", on: false,
+  { id: "closures", group: "fishing", name: "Fishing during seasonal bans", on: false, key: "Fishing during a seasonal ban",
     about: "Where AIS-broadcasting vessels fished during seasonal fishing bans (India, Bangladesh, Pakistan), compared with the weeks before and after. Bans change by season and some vessels are exempt, so each spot is a lead to check, never a finding.",
     source: "Global Fishing Watch fishing effort; ban dates from official notices" },
-  { id: "slicks", group: "oil", name: "Possible oil slicks", on: true,
+  { id: "slicks", group: "oil", name: "Possible oil slicks", on: true, key: "Possible oil slick",
     about: "The largest slicks a machine-learning model found on Sentinel-1 radar during the period. Where Cerulean matched candidate source ships (an ink edge on the map), open a slick to see them ranked and follow a ship's path back to it. Not checked by a person; a match is a lead, not proof.",
     source: "SkyTruth Cerulean" },
-  { id: "infra", group: "oil", name: "Offshore platforms", on: false,
+  { id: "infra", group: "oil", name: "Offshore platforms", on: false, key: "Offshore platform or wind turbine",
     about: "Oil and gas platforms and wind turbines found on satellite radar and optical images. A possible source for nearby oil slicks, and a place where service vessels gather.",
     source: "Global Fishing Watch offshore fixed infrastructure (Sentinel-1, Sentinel-2)" },
-  { id: "effort", group: "fishing", name: "Fishing effort", on: false,
+  { id: "effort", group: "fishing", name: "Fishing effort", on: false, key: "Fishing effort: brighter is more hours",
     about: "Where AIS-broadcasting fishing vessels appeared to fish during the period, by hours. Brighter orange means more hours. Compare it with the sea borders and with seasonal bans.",
     source: "Global Fishing Watch apparent fishing effort (AIS)" },
-  { id: "changes", group: "longView", name: "Lasting changes since 2020", on: false,
+  { id: "changes", group: "longView", name: "Lasting changes since 2020", on: false, key: "Lasting change in ships not on AIS",
     about: "Places where vessels seen by radar but not on AIS have risen or fallen for years, after allowing for satellite coverage, AIS reception, season and wind. Always computed over 2020 to now, whatever period is chosen.",
     source: "Ghost Fleet X trend scan" },
-  { id: "nightLights", group: "longView", name: "Lights at night", on: false,
+  { id: "nightLights", group: "longView", name: "Lights at night", on: false, key: "Lights at night, seen from space",
     about: "Night-time light seen from space on the last day of the period. Bright clusters far from land are usually fishing fleets working under lamps.",
     source: "NASA VIIRS day/night band (NOAA-20 satellite), via NASA GIBS" },
-  { id: "chlorophyll", group: "longView", name: "Ocean productivity", on: false,
+  { id: "chlorophyll", group: "longView", name: "Ocean productivity", on: false, key: "Ocean productivity: blue low, yellow high",
     about: "Chlorophyll in surface water on the last day of the period: where the sea is rich in plankton, and fish and fishing fleets tend to gather. Gaps are cloud.",
     source: "NASA MODIS-Aqua, via NASA GIBS" },
 ];
+
+/** Layers drawn with a chart symbol show that same symbol in the rail and the map key; the rest keep a swatch of their colour or line. */
+export const LAYER_GLYPH: Partial<Record<LayerId, IconName>> = {
+  aisOff: "ghost-fishing", turnOns: "fleet", encounters: "meet-carrier", loitering: "wait-carrier", fishing: "fish", slicks: "slick", infra: "platform",
+};
 
 export const DEFAULT_VISIBLE = Object.fromEntries(LAYERS.map((l) => [l.id, l.on])) as Record<LayerId, boolean>;
 
