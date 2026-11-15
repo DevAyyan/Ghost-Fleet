@@ -366,9 +366,9 @@ export function LayerRail(p: Props) {
   };
 
   return (
-    <aside className="rail theme-navy" aria-label="Map layers and what they show">
+    <aside className="rail theme-navy" aria-label="Leads and map layers">
       <div className="rail-head">
-        <h2>At sea</h2>
+        <h2>Leads in this period</h2>
         <PeriodBar period={period} onPeriod={onPeriod} />
       </div>
       <div className="rail-body">
