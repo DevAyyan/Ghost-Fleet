@@ -1,0 +1,8 @@
+# Not needed to build or run the single-project Vercel deployment (repo root)
+backend/data/raw
+backend/tests
+backend/scripts
+backend/.pytest_cache
+docs
+*.mp4
+*.webm

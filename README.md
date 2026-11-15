@@ -295,7 +295,11 @@ cd frontend && npm test && npx tsc --noEmit && npm run build
 `frontend/` and `backend/` are self-contained and deploy separately. `docs/`, `CLAUDE.md` and `PROGRESS.md` at the
 top level describe both.
 
-**Vercel (two projects from this one repo).** Create two Vercel projects that import this repo, with different
+**Vercel, one project (how the live site runs).** Import the repo with Root Directory left at the repo root. The root
+`vercel.json` builds `frontend/` as static files and runs the API as one Python function (`api/index.py`, which loads
+`backend/`), so the site calls `/api` on its own address and `VITE_API_BASE` stays unset. Set `GLOBAL_FISHING_WATCH`.
+
+**Vercel, two projects (alternative).** Create two Vercel projects that import this repo, with different
 **Root Directory** settings:
 
 1. **Backend** (Root Directory `backend`). `backend/vercel.json` runs the API as one Python function

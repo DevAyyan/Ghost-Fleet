@@ -1,0 +1,5 @@
+# Python dependencies of the API function for the single-project Vercel deployment (api/index.py at the repo root).
+# Keep in step with backend/requirements.txt and backend/pyproject.toml.
+numpy>=1.26
+fastapi>=0.110
+pydantic>=2.6
