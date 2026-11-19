@@ -1,0 +1,86 @@
+# Rebuilds the processed data every 6 hours and commits it, so the deployed API (which reads backend/data/processed/)
+# never shows a stale "pulled" date. The push redeploys the backend on Vercel.
+#
+# Runs, in order: ingest_real.py (trend panel) -> build_scan.py (precomputed scan, keyed to the panel's SHA-256)
+# -> ingest_sea.py (fishing in no-take MPAs) -> ingest_closures.py (seasonal bans). The raw download cache
+# (backend/data/raw/, gitignored) is kept between runs with actions/cache, so a run only re-fetches what is new;
+# the first run with an empty cache downloads everything and takes much longer.
+#
+# Needs the repository secret GLOBAL_FISHING_WATCH (the same token as in .env).
+name: Refresh data
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"        # off the hour: GitHub delays jobs scheduled exactly on it
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      GLOBAL_FISHING_WATCH: ${{ secrets.GLOBAL_FISHING_WATCH }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Restore raw download cache
+        uses: actions/cache@v4
+        with:
+          path: backend/data/raw
+          key: ghostfleet-raw-${{ github.run_id }}
+          restore-keys: ghostfleet-raw-
+
+      - name: Check the token is set
+        run: |
+          if [ -z "$GLOBAL_FISHING_WATCH" ]; then
+            echo "::error::Repository secret GLOBAL_FISHING_WATCH is not set"; exit 1
+          fi
+
+      - name: Trend panel
+        working-directory: backend
+        run: python3 -I scripts/ingest_real.py
+
+      - name: Precompute the trend scan
+        working-directory: backend
+        run: python3 scripts/build_scan.py
+
+      # The two map layers below are not essential: if Global Fishing Watch has a bad hour, keep the last good file
+      # and still publish the refreshed panel.
+      - name: Fishing in no-take protected areas
+        working-directory: backend
+        continue-on-error: true
+        run: python3 -I scripts/ingest_sea.py
+
+      - name: Fishing during seasonal bans
+        working-directory: backend
+        continue-on-error: true
+        run: python3 -I scripts/ingest_closures.py
+
+      - name: Commit and push
+        run: |
+          git add backend/data/processed
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(data): scheduled refresh $(date -u +%FT%H:%MZ)"
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            sleep 10
+          done
+          exit 1
